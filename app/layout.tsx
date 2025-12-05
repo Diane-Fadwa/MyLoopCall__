@@ -1,11 +1,11 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { GeistSans } from "geist/font/sans"
-import { GeistMono } from "geist/font/mono"
-import { Analytics } from "@vercel/analytics/next"
-import { Suspense } from "react"
-import { ThemeProvider } from "@/components/theme-provider"
+import { Inter, Roboto_Mono } from "next/font/google"
 import "./globals.css"
+import { ClientLayout } from "./client-layout"
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
+const robotoMono = Roboto_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
 export const metadata: Metadata = {
   title: "CRM Centre d'Appel - LOOP",
@@ -20,11 +20,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" suppressHydrationWarning>
-      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          <Suspense fallback={null}>{children}</Suspense>
-        </ThemeProvider>
-        <Analytics />
+      <body className={`${inter.variable} ${robotoMono.variable} font-sans antialiased`}>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   )

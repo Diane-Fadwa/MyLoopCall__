@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/theme-toggle"
+import Image from "next/image"
+import { useAuth } from "@/contexts/auth-context"
 import {
   LayoutDashboard,
   Users,
@@ -76,6 +78,7 @@ const navigation = [
 function SidebarContent({ collapsed, setCollapsed }: { collapsed: boolean; setCollapsed: (value: boolean) => void }) {
   const [expandedItems, setExpandedItems] = useState<string[]>([])
   const pathname = usePathname()
+  const { user } = useAuth()
 
   const toggleExpanded = (itemName: string) => {
     setExpandedItems((prev) =>
@@ -90,14 +93,14 @@ function SidebarContent({ collapsed, setCollapsed }: { collapsed: boolean; setCo
 
   return (
     <div className={cn("flex flex-col h-full bg-sidebar border-r border-sidebar-border", collapsed ? "w-16" : "w-64")}>
-      {/* Header */}
+      {/* Header with Logo */}
       <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
         {!collapsed && (
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">L</span>
+            <div className="relative w-8 h-8">
+              <Image src="/logo-myloop.png" alt="MY LOOP CALL" fill className="object-contain" />
             </div>
-            <span className="text-sidebar-foreground font-semibold text-lg">LOOP</span>
+            <span className="text-sidebar-foreground font-semibold text-lg">MYLOOPCALL</span>
           </div>
         )}
         <div className="flex items-center space-x-1">
