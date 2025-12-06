@@ -7,17 +7,28 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Sidebar } from "@/components/sidebar"
 import { useAuth } from "@/contexts/auth-context"
 import { usePathname } from "next/navigation"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { useState, useRef, useEffect } from "react"
 
 export function Header() {
   const { user, logout, isAuthenticated } = useAuth()
   const pathname = usePathname()
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+
+    if (userMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [userMenuOpen])
 
   // Don't show header on login/forgot-password pages
   if (["/login", "/forgot-password"].includes(pathname)) {
@@ -30,6 +41,11 @@ export function Header() {
       .map((n) => n[0])
       .join("")
       .toUpperCase() || "AD"
+
+  const handleLogout = () => {
+    setUserMenuOpen(false)
+    logout()
+  }
 
   return (
     <header className="flex items-center justify-between p-4 bg-card border-b border-border">
@@ -74,32 +90,33 @@ export function Header() {
           <Bell className="h-4 w-4" />
         </Button>
 
+        {/* User Menu */}
         {isAuthenticated && user && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="rounded-full">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
-                    {userInitials}
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <div className="flex flex-col space-y-1 p-2">
-                <p className="text-sm font-semibold text-foreground">{user.name}</p>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
+          <div className="relative" ref={menuRef}>
+            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setUserMenuOpen(!userMenuOpen)}>
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
+                  {userInitials}
+                </AvatarFallback>
+              </Avatar>
+            </Button>
+
+            {userMenuOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
+                <div className="flex flex-col space-y-1 p-3 border-b border-border">
+                  <p className="text-sm font-semibold text-foreground">{user.name}</p>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 transition"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  <span>Déconnexion</span>
+                </button>
               </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={logout}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 cursor-pointer"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                <span>Déconnexion</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            )}
+          </div>
         )}
       </div>
     </header>

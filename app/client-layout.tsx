@@ -1,20 +1,22 @@
 "use client"
-
-import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { AuthProvider } from "@/contexts/auth-context"
 import type React from "react"
-import { useAuthCheck } from "@/hooks/use-auth-checks"
+import { usePathname } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 
-// Separate component to use useAuth hook after AuthProvider
 function AuthLayoutWrapper({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthCheck()
+  const { isAuthenticated } = useAuth()
+  const pathname = usePathname()
 
-  if (!isAuthenticated && typeof window !== "undefined") {
-    return <>{children}</> // Let AuthProvider handle redirect
+  // Public pages that should not have sidebar/header
+  const isPublicPage = ["/login", "/forgot-password"].includes(pathname)
+
+  if (isPublicPage) {
+    return <>{children}</>
   }
 
   return (
@@ -33,12 +35,14 @@ function AuthLayoutWrapper({ children }: { children: React.ReactNode }) {
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
-    <><ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          <AuthProvider>
-              <Suspense fallback={<div>Loading...</div>}>
-                  <AuthLayoutWrapper>{children}</AuthLayoutWrapper>
-              </Suspense>
-          </AuthProvider>
-      </ThemeProvider><Analytics /></>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+      <AuthProvider>
+        <Suspense fallback={<div>Loading...</div>}>
+          <AuthLayoutWrapper>{children}</AuthLayoutWrapper>
+        </Suspense>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }
+
+export default ClientLayout
