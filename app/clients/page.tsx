@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Upload, Users, Search, RefreshCw, Filter, X } from "lucide-react"
+import { Plus, Upload, Users, Search, RefreshCw, Filter, X, Edit2, Trash2 } from "lucide-react"
 
 interface Client {
   id: number
@@ -29,6 +29,7 @@ export default function ClientsPage() {
   const [showForm, setShowForm] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
   const [nextId, setNextId] = useState(1)
+  const [editingId, setEditingId] = useState<number | null>(null)
 
   const [formData, setFormData] = useState({
     societe: "",
@@ -47,6 +48,32 @@ export default function ClientsPage() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
+  const handleDeleteClient = (id: number) => {
+    const confirmDelete = window.confirm(
+      "Êtes-vous sûr de vouloir supprimer ce client ? Cette action est irréversible.",
+    )
+    if (confirmDelete) {
+      setClients(clients.filter((c) => c.id !== id))
+    }
+  }
+
+  const handleEditClient = (client: Client) => {
+    setEditingId(client.id)
+    setFormData({
+      societe: client.societe,
+      contactPrincipal: client.contactPrincipal,
+      emailPrincipal: client.emailPrincipal,
+      telephone: client.telephone,
+      actif: client.actif,
+      categories: client.categories,
+      dateCreation: client.dateCreation,
+      interessePar: client.interessePar,
+      dateRDV: client.dateRDV,
+      derniereActivite: client.derniereActivite,
+    })
+    setShowForm(true)
+  }
+
   const handleAddClient = () => {
     // Validate required fields
     if (!formData.societe || !formData.contactPrincipal || !formData.emailPrincipal || !formData.telephone) {
@@ -54,13 +81,31 @@ export default function ClientsPage() {
       return
     }
 
-    const newClient: Client = {
-      id: nextId,
-      ...formData,
+    if (editingId !== null) {
+      const confirmUpdate = window.confirm("Êtes-vous sûr de vouloir modifier ce client ?")
+      if (confirmUpdate) {
+        setClients(
+          clients.map((c) =>
+            c.id === editingId
+              ? {
+                  id: editingId,
+                  ...formData,
+                }
+              : c,
+          ),
+        )
+        setEditingId(null)
+      }
+    } else {
+      const newClient: Client = {
+        id: nextId,
+        ...formData,
+      }
+
+      setClients([...clients, newClient])
+      setNextId(nextId + 1)
     }
 
-    setClients([...clients, newClient])
-    setNextId(nextId + 1)
     setShowForm(false)
 
     // Reset form
@@ -90,7 +135,25 @@ export default function ClientsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => {
+              setEditingId(null)
+              setShowForm(!showForm)
+              // Reset form when opening for new entry
+              if (!showForm) {
+                setFormData({
+                  societe: "",
+                  contactPrincipal: "",
+                  emailPrincipal: "",
+                  telephone: "",
+                  actif: true,
+                  categories: "",
+                  dateCreation: new Date().toISOString().split("T")[0],
+                  interessePar: "",
+                  dateRDV: "",
+                  derniereActivite: "",
+                })
+              }
+            }}
             className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -120,7 +183,9 @@ export default function ClientsPage() {
       {showForm && (
         <Card className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-0 shadow-md">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800">Ajouter un nouveau client</h2>
+            <h2 className="text-lg font-semibold text-gray-800">
+              {editingId ? "Modifier le client" : "Ajouter un nouveau client"}
+            </h2>
             <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
               <X className="h-4 w-4" />
             </Button>
@@ -227,7 +292,7 @@ export default function ClientsPage() {
               onClick={handleAddClient}
               className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
             >
-              Ajouter le client
+              {editingId ? "Modifier le client" : "Ajouter le client"}
             </Button>
           </div>
         </Card>
@@ -367,12 +432,13 @@ export default function ClientsPage() {
               <TableHead className="font-semibold text-gray-700">Intéressé par</TableHead>
               <TableHead className="font-semibold text-gray-700">Date de RDV</TableHead>
               <TableHead className="font-semibold text-gray-700">Dernière activité</TableHead>
+              <TableHead className="font-semibold text-gray-700 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {displayedClients.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-12 text-gray-500">
+                <TableCell colSpan={12} className="text-center py-12 text-gray-500">
                   <div className="flex flex-col items-center gap-2">
                     <Users className="h-12 w-12 text-gray-300" />
                     <div className="text-lg font-medium">Aucun enregistrement trouvé</div>
@@ -402,6 +468,28 @@ export default function ClientsPage() {
                   <TableCell className="text-gray-600">{client.interessePar || "-"}</TableCell>
                   <TableCell className="text-gray-600">{client.dateRDV || "-"}</TableCell>
                   <TableCell className="text-gray-600">{client.derniereActivite || "-"}</TableCell>
+                  <TableCell className="text-center">
+                    <div className="flex justify-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEditClient(client)}
+                        className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                        title="Modifier"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDeleteClient(client.id)}
+                        className="border-red-200 text-red-700 hover:bg-red-50"
+                        title="Supprimer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))
             )}

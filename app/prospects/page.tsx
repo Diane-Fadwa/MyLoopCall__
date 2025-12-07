@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Upload, List, Grid3X3, Search, ChevronDown, X } from "lucide-react"
+import { Plus, Upload, List, Grid3X3, Search, X, Edit2, Trash2 } from "lucide-react"
 
 const STATUSES = [
   "ANNULATION PAC",
@@ -105,6 +105,7 @@ export default function ProspectsPage() {
   const [prospects, setProspects] = useState(initialProspects)
   const [showForm, setShowForm] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [filters, setFilters] = useState({
     assignedTo: "Tous",
     status: "Tous les statuts",
@@ -137,14 +138,56 @@ export default function ProspectsPage() {
     return matchesSearch && matchesAssignee && matchesStatus && matchesSource
   })
 
+  const handleDeleteProspect = (id: number) => {
+    const confirmDelete = window.confirm(
+      "Êtes-vous sûr de vouloir supprimer ce prospect ? Cette action est irréversible.",
+    )
+    if (confirmDelete) {
+      setProspects(prospects.filter((p) => p.id !== id))
+    }
+  }
+
+  const handleEditProspect = (prospect: (typeof initialProspects)[0]) => {
+    setEditingId(prospect.id)
+    setFormData({
+      name: prospect.name,
+      email: prospect.email,
+      postalCode: prospect.postalCode,
+      phone: prospect.phone,
+      assignedTo: prospect.assignedTo,
+      status: prospect.status,
+      source: prospect.source,
+      interest: prospect.interest,
+    })
+    setShowForm(true)
+  }
+
   const handleAddProspect = (e: React.FormEvent) => {
     e.preventDefault()
     if (formData.name && formData.email && formData.postalCode && formData.phone) {
-      const newProspect = {
-        id: Math.max(...prospects.map((p) => p.id), 0) + 1,
-        ...formData,
+      if (editingId !== null) {
+        const confirmUpdate = window.confirm("Êtes-vous sûr de vouloir modifier ce prospect ?")
+        if (confirmUpdate) {
+          setProspects(
+            prospects.map((p) =>
+              p.id === editingId
+                ? {
+                    id: editingId,
+                    ...formData,
+                  }
+                : p,
+            ),
+          )
+          setEditingId(null)
+        }
+      } else {
+        const newProspect = {
+          id: Math.max(...prospects.map((p) => p.id), 0) + 1,
+          ...formData,
+        }
+        setProspects([...prospects, newProspect])
       }
-      setProspects([...prospects, newProspect])
+
       setFormData({
         name: "",
         email: "",
@@ -266,7 +309,23 @@ export default function ProspectsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => {
+              setEditingId(null)
+              setShowForm(!showForm)
+              // Reset form when opening for new entry
+              if (!showForm) {
+                setFormData({
+                  name: "",
+                  email: "",
+                  postalCode: "",
+                  phone: "",
+                  assignedTo: "Yacine",
+                  status: "NOUVEAU",
+                  source: "PV",
+                  interest: "",
+                })
+              }
+            }}
             className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -293,7 +352,9 @@ export default function ProspectsPage() {
       {showForm && (
         <Card className="p-6 bg-gradient-to-r from-blue-50 to-white border border-blue-200 shadow-md">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Ajouter un nouveau prospect</h3>
+            <h3 className="text-lg font-semibold text-gray-800">
+              {editingId ? "Modifier le prospect" : "Ajouter un nouveau prospect"}
+            </h3>
             <button onClick={() => setShowForm(false)} className="text-gray-500 hover:text-gray-700">
               <X className="h-5 w-5" />
             </button>
@@ -377,7 +438,7 @@ export default function ProspectsPage() {
               type="submit"
               className="bg-green-600 hover:bg-green-700 text-white col-span-1 md:col-span-2 lg:col-span-3"
             >
-              Ajouter le prospect
+              {editingId ? "Modifier le prospect" : "Ajouter le prospect"}
             </Button>
           </form>
         </Card>
@@ -516,6 +577,7 @@ export default function ProspectsPage() {
               <TableHead className="font-semibold text-gray-700">Statut</TableHead>
               <TableHead className="font-semibold text-gray-700">Source</TableHead>
               <TableHead className="font-semibold text-gray-700">Intérêt</TableHead>
+              <TableHead className="font-semibold text-gray-700 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -536,32 +598,55 @@ export default function ProspectsPage() {
                   </TableCell>
                   <TableCell className="text-gray-600">{prospect.email || "—"}</TableCell>
                   <TableCell>
-                    <span className="text-blue-600 font-medium">{prospect.postalCode}</span>
+                    <div className="font-medium text-gray-700">{prospect.postalCode}</div>
+                  </TableCell>
+                  <TableCell className="text-gray-600">{prospect.phone}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300">
+                      {prospect.assignedTo}
+                    </Badge>
                   </TableCell>
                   <TableCell>
-                    <span className="text-blue-600 font-medium">{prospect.phone}</span>
+                    <Badge className={getStatusColor(prospect.status)}>{prospect.status}</Badge>
                   </TableCell>
                   <TableCell>
-                    <span className="text-gray-600">{prospect.assignedTo}</span>
+                    <Badge variant="secondary" className="bg-gray-100 text-gray-800">
+                      {prospect.source}
+                    </Badge>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Badge className={`${getStatusColor(prospect.status)} font-medium px-3 py-1 rounded-full border`}>
-                        {prospect.status}
-                      </Badge>
-                      <ChevronDown className="h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" />
+                  <TableCell className="text-gray-600">{prospect.interest || "—"}</TableCell>
+                  <TableCell className="text-center">
+                    <div className="flex justify-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEditProspect(prospect)}
+                        className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                        title="Modifier"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDeleteProspect(prospect.id)}
+                        className="border-red-200 text-red-700 hover:bg-red-50"
+                        title="Supprimer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                  </TableCell>
-                  <TableCell className="text-gray-600">{prospect.source}</TableCell>
-                  <TableCell>
-                    <span className="text-blue-600 font-medium">{prospect.interest || "—"}</span>
                   </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                  Aucun prospect trouvé
+                <TableCell colSpan={10} className="text-center py-12 text-gray-500">
+                  <div className="flex flex-col items-center gap-2">
+                    <Search className="h-12 w-12 text-gray-300" />
+                    <div className="text-lg font-medium">Aucun prospect trouvé</div>
+                    <div className="text-sm">Ajustez vos filtres ou ajoutez un nouveau prospect</div>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
