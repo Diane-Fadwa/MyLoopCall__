@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Upload, Users, Search, RefreshCw, Filter, X, Edit2, Trash2 } from "lucide-react"
+import { ImportDialog } from "@/components/import-dialog"
 
 interface Client {
   id: number
@@ -30,6 +31,8 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [nextId, setNextId] = useState(1)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [showImportDialog, setShowImportDialog] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState({
     societe: "",
@@ -48,34 +51,7 @@ export default function ClientsPage() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleDeleteClient = (id: number) => {
-    const confirmDelete = window.confirm(
-      "Êtes-vous sûr de vouloir supprimer ce client ? Cette action est irréversible.",
-    )
-    if (confirmDelete) {
-      setClients(clients.filter((c) => c.id !== id))
-    }
-  }
-
-  const handleEditClient = (client: Client) => {
-    setEditingId(client.id)
-    setFormData({
-      societe: client.societe,
-      contactPrincipal: client.contactPrincipal,
-      emailPrincipal: client.emailPrincipal,
-      telephone: client.telephone,
-      actif: client.actif,
-      categories: client.categories,
-      dateCreation: client.dateCreation,
-      interessePar: client.interessePar,
-      dateRDV: client.dateRDV,
-      derniereActivite: client.derniereActivite,
-    })
-    setShowForm(true)
-  }
-
   const handleAddClient = () => {
-    // Validate required fields
     if (!formData.societe || !formData.contactPrincipal || !formData.emailPrincipal || !formData.telephone) {
       alert("Veuillez remplir tous les champs obligatoires")
       return
@@ -108,7 +84,6 @@ export default function ClientsPage() {
 
     setShowForm(false)
 
-    // Reset form
     setFormData({
       societe: "",
       contactPrincipal: "",
@@ -123,11 +98,62 @@ export default function ClientsPage() {
     })
   }
 
-  const displayedClients = excludeInactive ? clients.filter((c) => c.actif) : clients
-
-  function handleExport(arg0: string): void {
-    throw new Error("Function not implemented.")
+  const handleDeleteClient = (id: number) => {
+    const confirmDelete = window.confirm(
+      "Êtes-vous sûr de vouloir supprimer ce client ? Cette action est irréversible.",
+    )
+    if (confirmDelete) {
+      setClients(clients.filter((c) => c.id !== id))
+    }
   }
+
+  const handleEditClient = (client: Client) => {
+    setEditingId(client.id)
+    setFormData({
+      societe: client.societe,
+      contactPrincipal: client.contactPrincipal,
+      emailPrincipal: client.emailPrincipal,
+      telephone: client.telephone,
+      actif: client.actif,
+      categories: client.categories,
+      dateCreation: client.dateCreation,
+      interessePar: client.interessePar,
+      dateRDV: client.dateRDV,
+      derniereActivite: client.derniereActivite,
+    })
+    setShowForm(true)
+  }
+
+  const handleImportClients = (data: Record<string, string>[]) => {
+    const importedClients: Client[] = data
+      .filter((row) => row.societe && row.contactprincipal && row.emailprincipal && row.telephone)
+      .map((row) => ({
+        id: nextId + Math.random(), // temporary ID
+        societe: row.societe || "",
+        contactPrincipal: row.contactprincipal || row.contact || "",
+        emailPrincipal: row.emailprincipal || row.email || "",
+        telephone: row.telephone || row.phone || "",
+        actif: row.actif?.toLowerCase() === "oui" || row.actif === "true" || row.actif === "1" || true,
+        categories: row.categories || row.categorie || "",
+        dateCreation: row.datecreation || row.date || new Date().toISOString().split("T")[0],
+        interessePar: row.interessepar || row.interesse || "",
+        dateRDV: row.daterdv || row.rdv || "",
+        derniereActivite: row.derniereactivite || "",
+      }))
+
+    if (importedClients.length === 0) {
+      alert(
+        "Aucun client valide trouvé dans le fichier. Vérifiez que les colonnes obligatoires (Société, Contact principal, E-mail, Téléphone) sont présentes.",
+      )
+      return
+    }
+
+    setClients([...clients, ...importedClients])
+    setNextId(nextId + importedClients.length + 1)
+    alert(`${importedClients.length} client(s) importé(s) avec succès !`)
+  }
+
+  const displayedClients = excludeInactive ? clients.filter((c) => c.actif) : clients
 
   return (
     <div className="flex-1 space-y-6 p-6">
@@ -138,7 +164,6 @@ export default function ClientsPage() {
             onClick={() => {
               setEditingId(null)
               setShowForm(!showForm)
-              // Reset form when opening for new entry
               if (!showForm) {
                 setFormData({
                   societe: "",
@@ -160,6 +185,7 @@ export default function ClientsPage() {
             Ajouter un client
           </Button>
           <Button
+            onClick={() => setShowImportDialog(true)}
             variant="outline"
             className="border-blue-200 text-blue-700 hover:bg-blue-50 shadow-sm hover:shadow-md transition-all duration-200 bg-transparent"
           >
@@ -180,6 +206,15 @@ export default function ClientsPage() {
         </Button>
       </div>
 
+      {/* Import Dialog */}
+      <ImportDialog
+        isOpen={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        onImport={handleImportClients}
+        title="Importer des clients"
+        description="Sélectionnez un fichier CSV ou Excel contenant vos clients"
+      />
+
       {showForm && (
         <Card className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-0 shadow-md">
           <div className="flex items-center justify-between mb-4">
@@ -192,7 +227,6 @@ export default function ClientsPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            {/* Société - Required */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Société *</label>
               <Input
@@ -203,7 +237,6 @@ export default function ClientsPage() {
               />
             </div>
 
-            {/* Contact Principal - Required */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Contact principal *</label>
               <Input
@@ -214,7 +247,6 @@ export default function ClientsPage() {
               />
             </div>
 
-            {/* Email Principal - Required */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">E-mail principal *</label>
               <Input
@@ -226,7 +258,6 @@ export default function ClientsPage() {
               />
             </div>
 
-            {/* Téléphone - Required */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone *</label>
               <Input
@@ -237,7 +268,6 @@ export default function ClientsPage() {
               />
             </div>
 
-            {/* Catégories */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Catégories</label>
               <Input
@@ -248,7 +278,6 @@ export default function ClientsPage() {
               />
             </div>
 
-            {/* Intéressé par */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Intéressé par</label>
               <Input
@@ -259,7 +288,6 @@ export default function ClientsPage() {
               />
             </div>
 
-            {/* Date de RDV */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Date de RDV</label>
               <Input
@@ -270,7 +298,6 @@ export default function ClientsPage() {
               />
             </div>
 
-            {/* Actif */}
             <div className="flex items-center gap-2 pt-6">
               <Checkbox
                 id="actif"
@@ -362,31 +389,14 @@ export default function ClientsPage() {
               <SelectItem value="200">200</SelectItem>
             </SelectContent>
           </Select>
-          <div className="relative group">
-            <Button variant="outline" size="sm" className="hover:bg-gray-50 bg-transparent">
-              Exporter
-            </Button>
-            <div className="absolute left-0 mt-0 w-32 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
-              <button
-                onClick={() => handleExport("csv")}
-                className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-gray-700"
-              >
-                CSV
-              </button>
-              <button
-                onClick={() => handleExport("excel")}
-                className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-gray-700 border-t border-gray-200"
-              >
-                Excel
-              </button>
-              <button
-                onClick={() => handleExport("pdf")}
-                className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-gray-700 border-t border-gray-200"
-              >
-                PDF
-              </button>
-            </div>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => alert("Export non disponible pour le moment")}
+            className="hover:bg-gray-50 bg-transparent"
+          >
+            Exporter
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -482,7 +492,7 @@ export default function ClientsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleDeleteClient(client.id)}
+                        onClick={() => handleDeleteClient(client.id as number)}
                         className="border-red-200 text-red-700 hover:bg-red-50"
                         title="Supprimer"
                       >

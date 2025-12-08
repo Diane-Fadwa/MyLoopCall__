@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Upload, List, Grid3X3, Search, X, Edit2, Trash2 } from "lucide-react"
+import { ImportDialog } from "@/components/import-dialog"
 
 const STATUSES = [
   "ANNULATION PAC",
@@ -105,6 +106,7 @@ export default function ProspectsPage() {
   const [prospects, setProspects] = useState(initialProspects)
   const [showForm, setShowForm] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  const [showImportDialog, setShowImportDialog] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [filters, setFilters] = useState({
     assignedTo: "Tous",
@@ -137,30 +139,6 @@ export default function ProspectsPage() {
 
     return matchesSearch && matchesAssignee && matchesStatus && matchesSource
   })
-
-  const handleDeleteProspect = (id: number) => {
-    const confirmDelete = window.confirm(
-      "Êtes-vous sûr de vouloir supprimer ce prospect ? Cette action est irréversible.",
-    )
-    if (confirmDelete) {
-      setProspects(prospects.filter((p) => p.id !== id))
-    }
-  }
-
-  const handleEditProspect = (prospect: (typeof initialProspects)[0]) => {
-    setEditingId(prospect.id)
-    setFormData({
-      name: prospect.name,
-      email: prospect.email,
-      postalCode: prospect.postalCode,
-      phone: prospect.phone,
-      assignedTo: prospect.assignedTo,
-      status: prospect.status,
-      source: prospect.source,
-      interest: prospect.interest,
-    })
-    setShowForm(true)
-  }
 
   const handleAddProspect = (e: React.FormEvent) => {
     e.preventDefault()
@@ -303,6 +281,56 @@ export default function ProspectsPage() {
     }
   }
 
+  const handleDeleteProspect = (id: number) => {
+    const confirmDelete = window.confirm(
+      "Êtes-vous sûr de vouloir supprimer ce prospect ? Cette action est irréversible.",
+    )
+    if (confirmDelete) {
+      setProspects(prospects.filter((p) => p.id !== id))
+    }
+  }
+
+  const handleEditProspect = (prospect: (typeof initialProspects)[0]) => {
+    setEditingId(prospect.id)
+    setFormData({
+      name: prospect.name,
+      email: prospect.email,
+      postalCode: prospect.postalCode,
+      phone: prospect.phone,
+      assignedTo: prospect.assignedTo,
+      status: prospect.status,
+      source: prospect.source,
+      interest: prospect.interest,
+    })
+    setShowForm(true)
+  }
+
+  const handleImportProspects = (data: Record<string, string>[]) => {
+    const importedProspects = data
+      .filter((row) => row.name && row.email && row.postalcode && row.phone)
+      .map((row) => ({
+        id: Math.max(...prospects.map((p) => p.id), 0) + Math.random(),
+        name: row.name || "",
+        email: row.email || "",
+        postalCode: row.postalcode || row.postal || "",
+        phone: row.phone || row.telephone || "",
+        assignedTo: row.assignedto || row.assigned || "Yacine",
+        status: row.status || "NOUVEAU",
+        source: row.source || "PV",
+        interest: row.interest || row.interesse || "",
+      }))
+
+    if (importedProspects.length === 0) {
+      alert(
+        "Aucun prospect valide trouvé dans le fichier. Vérifiez que les colonnes obligatoires (Nom, Email, Code Postal, Téléphone) sont présentes.",
+      )
+      return
+    }
+
+    setProspects([...prospects, ...importedProspects])
+    alert(`${importedProspects.length} prospect(s) importé(s) avec succès !`)
+  }
+
   return (
     <div className="flex-1 space-y-6 p-6">
       {/* Header Actions */}
@@ -312,7 +340,6 @@ export default function ProspectsPage() {
             onClick={() => {
               setEditingId(null)
               setShowForm(!showForm)
-              // Reset form when opening for new entry
               if (!showForm) {
                 setFormData({
                   name: "",
@@ -332,6 +359,7 @@ export default function ProspectsPage() {
             Ajouter un prospect
           </Button>
           <Button
+            onClick={() => setShowImportDialog(true)}
             variant="outline"
             className="border-blue-200 text-blue-700 hover:bg-blue-50 shadow-sm hover:shadow-md transition-all duration-200 bg-transparent"
           >
@@ -348,6 +376,15 @@ export default function ProspectsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Import Dialog */}
+      <ImportDialog
+        isOpen={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        onImport={handleImportProspects}
+        title="Importer des prospects"
+        description="Sélectionnez un fichier CSV ou Excel contenant vos prospects"
+      />
 
       {showForm && (
         <Card className="p-6 bg-gradient-to-r from-blue-50 to-white border border-blue-200 shadow-md">
@@ -598,21 +635,26 @@ export default function ProspectsPage() {
                   </TableCell>
                   <TableCell className="text-gray-600">{prospect.email || "—"}</TableCell>
                   <TableCell>
-                    <div className="font-medium text-gray-700">{prospect.postalCode}</div>
+                    <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300">
+                      {prospect.postalCode}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-gray-600">{prospect.phone}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300">
-                      {prospect.assignedTo}
-                    </Badge>
+                    <div className="flex items-center gap-1">
+                      <Avatar className="h-6 w-6 bg-gradient-to-br from-blue-500 to-blue-700">
+                        <AvatarFallback className="text-white text-xs font-medium">
+                          {prospect.assignedTo[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm text-gray-700">{prospect.assignedTo}</span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge className={getStatusColor(prospect.status)}>{prospect.status}</Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className="bg-gray-100 text-gray-800">
-                      {prospect.source}
-                    </Badge>
+                    <Badge variant="secondary">{prospect.source}</Badge>
                   </TableCell>
                   <TableCell className="text-gray-600">{prospect.interest || "—"}</TableCell>
                   <TableCell className="text-center">
@@ -629,7 +671,7 @@ export default function ProspectsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleDeleteProspect(prospect.id)}
+                        onClick={() => handleDeleteProspect(prospect.id as number)}
                         className="border-red-200 text-red-700 hover:bg-red-50"
                         title="Supprimer"
                       >
@@ -645,7 +687,7 @@ export default function ProspectsPage() {
                   <div className="flex flex-col items-center gap-2">
                     <Search className="h-12 w-12 text-gray-300" />
                     <div className="text-lg font-medium">Aucun prospect trouvé</div>
-                    <div className="text-sm">Ajustez vos filtres ou ajoutez un nouveau prospect</div>
+                    <div className="text-sm">Commencez par ajouter votre premier prospect</div>
                   </div>
                 </TableCell>
               </TableRow>
