@@ -1,6 +1,6 @@
 "use client"
 
-import { Search, Plus, Bell, Share, Check, Clock, LogOut } from "lucide-react"
+import { Search, Plus, Share, Check, Clock, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/sidebar"
 import { useAuth } from "@/contexts/auth-context"
 import { usePathname } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
+import { NotificationCenter } from "@/components/notification-center"
 
 export function Header() {
   const { user, logout, isAuthenticated } = useAuth()
@@ -36,11 +37,11 @@ export function Header() {
   }
 
   const userInitials =
-    user?.name
-      ?.split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase() || "AD"
+    user?.firstName && user?.lastName
+      ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
+      : user?.email?.substring(0, 2).toUpperCase() || "AD"
+
+  const userName = user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : user?.email || "User"
 
   const handleLogout = () => {
     setUserMenuOpen(false)
@@ -86,9 +87,8 @@ export function Header() {
           <Plus className="h-4 w-4" />
         </Button>
 
-        <Button variant="ghost" size="sm">
-          <Bell className="h-4 w-4" />
-        </Button>
+        {/* NotificationCenter */}
+        <NotificationCenter />
 
         {/* User Menu */}
         {isAuthenticated && user && (
@@ -104,7 +104,7 @@ export function Header() {
             {userMenuOpen && (
               <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
                 <div className="flex flex-col space-y-1 p-3 border-b border-border">
-                  <p className="text-sm font-semibold text-foreground">{user.name}</p>
+                  <p className="text-sm font-semibold text-foreground">{userName}</p>
                   <p className="text-xs text-muted-foreground">{user.email}</p>
                 </div>
                 <button

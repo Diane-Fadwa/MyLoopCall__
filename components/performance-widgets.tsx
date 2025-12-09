@@ -3,7 +3,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from "recharts"
 import { Users, Target, Clock, TrendingUp, Award, Phone } from "lucide-react"
 
 const teamPerformance = [
@@ -15,10 +14,10 @@ const teamPerformance = [
 ]
 
 const responseTimeData = [
-  { range: "< 30s", count: 234, color: "hsl(var(--chart-2))" },
-  { range: "30s-1m", count: 156, color: "hsl(var(--chart-1))" },
-  { range: "1m-2m", count: 89, color: "hsl(var(--chart-4))" },
-  { range: "> 2m", count: 23, color: "hsl(var(--chart-3))" },
+  { range: "< 30s", count: 234 },
+  { range: "30s-1m", count: 156 },
+  { range: "1m-2m", count: 89 },
+  { range: "> 2m", count: 23 },
 ]
 
 const kpiMetrics = [
@@ -52,6 +51,9 @@ const kpiMetrics = [
 ]
 
 export function PerformanceWidgets() {
+  const maxRevenue = Math.max(...teamPerformance.map((t) => t.revenue))
+  const totalResponseTime = responseTimeData.reduce((sum, item) => sum + item.count, 0)
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
       {/* Team Performance */}
@@ -76,15 +78,15 @@ export function PerformanceWidgets() {
                         <div className="bg-popover border border-border rounded-lg p-3 shadow-lg">
                           <p className="font-medium">{label}</p>
                           <p className="text-sm">Appels: {data.calls}</p>
-                          <p className="text-sm">Contrats: {data.deals}</p>
+                  <p className="text-sm">Contrats: {data.deals}</p>
                           <p className="text-sm">CA: €{data.revenue.toLocaleString()}</p>
-                        </div>
-                      )
+                </div>
+                )
                     }
                     return null
                   }}
                 />
-                <Bar dataKey="revenue" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="revenue" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -114,7 +116,7 @@ export function PerformanceWidgets() {
                     stroke="none"
                   >
                     {responseTimeData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+              <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -125,8 +127,8 @@ export function PerformanceWidgets() {
                             <p className="text-sm">
                               {payload[0].payload.range}: {payload[0].value} appels
                             </p>
-                          </div>
-                        )
+                </div>
+                )
                       }
                       return null
                     }}
@@ -140,11 +142,11 @@ export function PerformanceWidgets() {
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
                     <span>{item.range}</span>
-                  </div>
-                  <span className="font-medium">{item.count}</span>
                 </div>
-              ))}
-            </div>
+<span className="font-medium">{item.count}</span>
+              </div>
+            ))}
+</div>
           </div>
         </CardContent>
       </Card>

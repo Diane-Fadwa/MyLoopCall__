@@ -5,8 +5,13 @@ import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 
 interface User {
+  id: number
   email: string
-  name: string
+  firstName: string | null
+  lastName: string | null
+  profileImage: string | null
+  role: string
+  token: string
 }
 
 interface AuthContextType {
@@ -30,7 +35,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const storedUser = localStorage.getItem("myloop_user")
     if (storedUser) {
-      setUser(JSON.parse(storedUser))
+      try {
+        setUser(JSON.parse(storedUser))
+      } catch (error) {
+        console.error("[v0] Error parsing stored user:", error)
+        localStorage.removeItem("myloop_user")
+      }
     }
     setIsLoading(false)
   }, [])
@@ -43,22 +53,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [isLoading, user, pathname, router])
 
   const login = async (email: string, password: string) => {
-    // Simulate API call
-    if (email === "admin@myloop.com" && password === "YMadmin2025") {
-      const userData: User = {
-        email,
-        name: "Administrator",
+    try {
+      const response = await fetch("http://localhost:8080/api/v1/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Login failed")
       }
+
+      const userData: User = await response.json()
       localStorage.setItem("myloop_user", JSON.stringify(userData))
+      localStorage.setItem("myloop_token", userData.token)
       setUser(userData)
       router.push("/")
-    } else {
-      throw new Error("Invalid email or password")
+    } catch (error) {
+      throw error instanceof Error ? error : new Error("Login failed")
     }
   }
 
   const logout = () => {
     localStorage.removeItem("myloop_user")
+    localStorage.removeItem("myloop_token")
     setUser(null)
     router.push("/login")
   }
@@ -78,8 +99,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext)
+  // Return a safe default context during initial render instead of throwing
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
+    return {
+      user: null,
+      isLoading: true,
+      isAuthenticated: false,
+      login: async () => Promise.reject(new Error("Auth not initialized")),
+      logout: () => {},
+      forgotPassword: async () => Promise.reject(new Error("Auth not initialized")),
+    } as AuthContextType
   }
   return context
 }

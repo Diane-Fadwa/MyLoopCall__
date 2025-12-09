@@ -7,6 +7,8 @@ import { AuthProvider } from "@/contexts/auth-context"
 import type React from "react"
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
+import { NotificationToast } from "@/components/notification-toast"
+import { ThemeInitializer } from "@/components/theme-initializer"
 
 function AuthLayoutWrapper({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -37,8 +39,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
       <AuthProvider>
+        <ThemeInitializer />
         <Suspense fallback={<div>Loading...</div>}>
           <AuthLayoutWrapper>{children}</AuthLayoutWrapper>
+          <NotificationToast />
         </Suspense>
       </AuthProvider>
     </ThemeProvider>

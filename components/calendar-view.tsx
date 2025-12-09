@@ -1,14 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, Filter } from "lucide-react"
+import { ChevronLeft, ChevronRight, Filter, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { EventDialog } from "@/components/event-dialog"
+import { eventService } from "@/lib/event-service"
+import type { CalendarEvent } from "@/lib/event-types"
 
 const daysOfWeek = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."]
 
-const getCalendarDays = (month: number, year: number) => {
+const getCalendarDays = (month: number, year: number, events: CalendarEvent[]) => {
   const firstDay = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0)
   const daysInMonth = lastDay.getDate()
@@ -24,11 +27,12 @@ const getCalendarDays = (month: number, year: number) => {
 
   // Current month days
   for (let i = 1; i <= daysInMonth; i++) {
-    const events = []
-    if (i === 15) events.push({ title: "Réunion équipe", type: "meeting" })
-    if (i === 18) events.push({ title: "Appel client", type: "call" })
-    if (i === 25) events.push({ title: "Formation", type: "training" })
-    days.push({ date: i, isCurrentMonth: true, events })
+    const currentDate = new Date(year, month, i)
+    const dayEvents = events.filter((event) => {
+      const eventDate = new Date(event.startDate)
+      return eventDate.getDate() === i && eventDate.getMonth() === month && eventDate.getFullYear() === year
+    })
+    days.push({ date: i, isCurrentMonth: true, events: dayEvents })
   }
 
   // Next month days
@@ -62,8 +66,18 @@ export function CalendarView() {
   const [currentMonth, setCurrentMonth] = useState(today.getMonth())
   const [currentYear, setCurrentYear] = useState(today.getFullYear())
   const [filterOpen, setFilterOpen] = useState(false)
+  const [eventDialogOpen, setEventDialogOpen] = useState(false)
+  const [selectedDateForEvent, setSelectedDateForEvent] = useState<Date | undefined>()
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | undefined>()
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [events, setEvents] = useState<CalendarEvent[]>([])
 
-  const calendarDays = getCalendarDays(currentMonth, currentYear)
+  useEffect(() => {
+    setEvents(eventService.getEvents())
+    setIsLoaded(true)
+  }, [])
+
+  const calendarDays = getCalendarDays(currentMonth, currentYear, events)
 
   const handlePreviousMonth = () => {
     if (currentMonth === 0) {
@@ -95,6 +109,44 @@ export function CalendarView() {
 
   const handleFilter = () => {
     setFilterOpen(!filterOpen)
+  }
+
+  const handleOpenEventDialog = (date: number) => {
+    const eventDate = new Date(currentYear, currentMonth, date)
+    setSelectedDateForEvent(eventDate)
+    setSelectedEvent(undefined)
+    setEventDialogOpen(true)
+  }
+
+  const handleEditEvent = (event: CalendarEvent) => {
+    setSelectedEvent(event)
+    setEventDialogOpen(true)
+  }
+
+  const handleSaveEvent = (event: Omit<CalendarEvent, "id">) => {
+    if (selectedEvent) {
+      eventService.updateEvent(selectedEvent.id, event)
+    } else {
+      eventService.addEvent(event)
+    }
+    setEvents(eventService.getEvents())
+    setEventDialogOpen(false)
+    setSelectedEvent(undefined)
+  }
+
+  const handleDeleteEvent = (eventId: string) => {
+    eventService.deleteEvent(eventId)
+    setEvents(eventService.getEvents())
+    setEventDialogOpen(false)
+    setSelectedEvent(undefined)
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="space-y-6 min-h-[500px] flex items-center justify-center text-muted-foreground">
+        Chargement...
+      </div>
+    )
   }
 
   return (
@@ -171,25 +223,47 @@ export function CalendarView() {
           <div
             key={index}
             className={cn(
-              "min-h-[70px] sm:min-h-[90px] p-2 sm:p-3 border border-border/30 cursor-pointer rounded-md hover:bg-accent/50 transition-all duration-200 hover:border-primary/50",
+              "min-h-[70px] sm:min-h-[90px] p-2 sm:p-3 border border-border/30 rounded-md hover:bg-accent/50 transition-all duration-200 hover:border-primary/50 cursor-pointer",
               !day.isCurrentMonth && "text-muted-foreground bg-muted/10",
               day.date === selectedDate &&
                 day.isCurrentMonth &&
                 "bg-primary/15 border-primary/50 ring-2 ring-primary/20",
             )}
-            onClick={() => day.isCurrentMonth && setSelectedDate(day.date)}
+            onClick={() => {
+              if (day.isCurrentMonth) {
+                setSelectedDate(day.date)
+              }
+              handleOpenEventDialog(day.date)
+            }}
           >
-            <div className="text-xs sm:text-sm font-semibold text-foreground">{day.date}</div>
-            <div className="mt-1 space-y-1">
-              {day.events.map((event, eventIndex) => (
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs sm:text-sm font-semibold text-foreground">{day.date}</div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleOpenEventDialog(day.date)
+                }}
+                className="text-muted-foreground hover:text-primary transition-colors opacity-0 hover:opacity-100"
+                title="Ajouter un événement"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
+            <div className="space-y-1">
+              {day.events.map((event) => (
                 <Badge
-                  key={eventIndex}
+                  key={event.id}
                   variant="secondary"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleEditEvent(event)
+                  }}
                   className={cn(
-                    "text-xs px-1.5 py-0.5 h-5 text-[10px] sm:text-xs w-full text-center",
+                    "text-xs px-1.5 py-0.5 h-5 text-[10px] sm:text-xs w-full text-center cursor-pointer hover:opacity-80",
                     event.type === "meeting" && "bg-chart-1/20 text-chart-1",
                     event.type === "call" && "bg-chart-2/20 text-chart-2",
                     event.type === "training" && "bg-chart-4/20 text-chart-4",
+                    event.type === "other" && "bg-chart-3/20 text-chart-3",
                   )}
                 >
                   <span className="truncate text-[9px] sm:text-xs">{event.title}</span>
@@ -207,6 +281,18 @@ export function CalendarView() {
         {currentView === "Jour" &&
           `Affichage: ${currentView} - ${selectedDate} ${monthNames[currentMonth]} ${currentYear}`}
       </div>
+
+      <EventDialog
+        isOpen={eventDialogOpen}
+        onClose={() => {
+          setEventDialogOpen(false)
+          setSelectedEvent(undefined)
+        }}
+        onSave={handleSaveEvent}
+        onDelete={handleDeleteEvent}
+        initialDate={selectedDateForEvent}
+        initialEvent={selectedEvent}
+      />
     </div>
   )
 }
