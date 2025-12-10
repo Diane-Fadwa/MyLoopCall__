@@ -1,14 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { ThemeToggle } from "@/components/theme-toggle"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
+import { useSidebar } from "@/contexts/sidebar-context"
 import {
   LayoutDashboard,
   Users,
@@ -26,7 +25,7 @@ import {
   Save,
   Target,
   DollarSign,
-  LucideContrast as FileContract,
+  Handshake,
   Calculator,
   Mail,
   Palette,
@@ -34,6 +33,7 @@ import {
   UserCog,
   Navigation,
   Wrench,
+  X,
 } from "lucide-react"
 
 const navigation = [
@@ -61,7 +61,7 @@ const navigation = [
       { name: "Support", href: "/parametres/support", icon: Settings },
       { name: "Prospects", href: "/parametres/prospects", icon: Target },
       { name: "Finance", href: "/parametres/finance", icon: DollarSign },
-      { name: "Contrats", href: "/parametres/contrats", icon: FileContract },
+      { name: "Contrats", href: "/parametres/contrats", icon: Handshake },
       { name: "Estimate request", href: "/parametres/estimate", icon: Calculator },
       { name: "Modules", href: "/parametres/modules", icon: Wrench },
       { name: "Modules d'emails", href: "/parametres/emails", icon: Mail },
@@ -76,7 +76,7 @@ const navigation = [
 ]
 
 function SidebarContent({ collapsed, setCollapsed }: { collapsed: boolean; setCollapsed: (value: boolean) => void }) {
-  const [expandedItems, setExpandedItems] = useState<string[]>([])
+  const [expandedItems, setExpandedItems] = useState<string[]>(["Paramètres"]) // Initialize with "Paramètres" expanded by default
   const pathname = usePathname()
   const { user } = useAuth()
 
@@ -91,6 +91,12 @@ function SidebarContent({ collapsed, setCollapsed }: { collapsed: boolean; setCo
     return pathname.startsWith(href)
   }
 
+  useEffect(() => {
+    if (pathname.startsWith("/parametres") && !expandedItems.includes("Paramètres")) {
+      setExpandedItems((prev) => [...prev, "Paramètres"])
+    }
+  }, [pathname, expandedItems])
+
   return (
     <div className={cn("flex flex-col h-full bg-sidebar border-r border-sidebar-border", collapsed ? "w-16" : "w-64")}>
       {/* Header with Logo */}
@@ -100,11 +106,10 @@ function SidebarContent({ collapsed, setCollapsed }: { collapsed: boolean; setCo
             <div className="relative w-8 h-8">
               <Image src="/logo-myloop.png" alt="MY LOOP CALL" fill className="object-contain" />
             </div>
-            <span className="text-sidebar-foreground font-semibold text-lg">MYLOOPCALL</span>
+            <span className="text-sidebar-foreground font-semibold text-lg">LOOP</span>
           </div>
         )}
         <div className="flex items-center space-x-1">
-          {!collapsed && <ThemeToggle />}
           <Button
             variant="ghost"
             size="sm"
@@ -193,7 +198,8 @@ function SidebarContent({ collapsed, setCollapsed }: { collapsed: boolean; setCo
 }
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false)
+  const { collapsed, setCollapsed } = useSidebar()
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
     <>
@@ -202,17 +208,20 @@ export function Sidebar() {
         <SidebarContent collapsed={collapsed} setCollapsed={setCollapsed} />
       </div>
 
-      {/* Mobile Sidebar */}
-      <Sheet>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="sm" className="lg:hidden">
-            <Menu className="h-5 w-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="p-0 w-64">
-          <SidebarContent collapsed={false} setCollapsed={() => {}} />
-        </SheetContent>
-      </Sheet>
+      {/* Mobile Sidebar - Simple Toggle */}
+      <div className="lg:hidden flex items-center">
+        <Button variant="ghost" size="sm" onClick={() => setMobileOpen(!mobileOpen)} className="text-foreground">
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </Button>
+
+        {mobileOpen && (
+          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setMobileOpen(false)}>
+            <div className="fixed inset-y-0 left-0 z-50 w-64 bg-sidebar" onClick={(e) => e.stopPropagation()}>
+              <SidebarContent collapsed={false} setCollapsed={() => {}} />
+            </div>
+          </div>
+        )}
+      </div>
     </>
   )
 }

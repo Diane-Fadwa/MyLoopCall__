@@ -1,9 +1,12 @@
 "use client"
 import { Suspense } from "react"
+import { cn } from "@/lib/utils"
+
 import { ThemeProvider } from "@/components/theme-provider"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { AuthProvider } from "@/contexts/auth-context"
+import { SidebarProvider, useSidebar } from "@/contexts/sidebar-context"
 import type React from "react"
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
@@ -12,9 +15,9 @@ import { ThemeInitializer } from "@/components/theme-initializer"
 
 function AuthLayoutWrapper({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
+  const { collapsed } = useSidebar()
   const pathname = usePathname()
 
-  // Public pages that should not have sidebar/header
   const isPublicPage = ["/login", "/forgot-password"].includes(pathname)
 
   if (isPublicPage) {
@@ -23,7 +26,12 @@ function AuthLayoutWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-background">
-      <div className="hidden lg:block w-64 flex-shrink-0 border-r border-gray-200">
+      <div
+        className={cn(
+          "hidden lg:block flex-shrink-0 border-r border-gray-200 transition-all duration-300",
+          collapsed ? "w-16" : "w-64",
+        )}
+      >
         <Sidebar />
       </div>
 
@@ -39,11 +47,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
       <AuthProvider>
-        <ThemeInitializer />
-        <Suspense fallback={<div>Loading...</div>}>
-          <AuthLayoutWrapper>{children}</AuthLayoutWrapper>
-          <NotificationToast />
-        </Suspense>
+        <SidebarProvider>
+          <ThemeInitializer />
+          <Suspense fallback={<div>Loading...</div>}>
+            <AuthLayoutWrapper>{children}</AuthLayoutWrapper>
+            <NotificationToast />
+          </Suspense>
+        </SidebarProvider>
       </AuthProvider>
     </ThemeProvider>
   )
