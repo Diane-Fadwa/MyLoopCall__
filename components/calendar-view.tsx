@@ -8,8 +8,24 @@ import { cn } from "@/lib/utils"
 import { EventDialog } from "@/components/event-dialog"
 import { eventService } from "@/lib/event-service"
 import type { CalendarEvent } from "@/lib/event-types"
+import { prospectsService, type Prospect } from "@/lib/prospects-data"
 
 const daysOfWeek = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."]
+
+const convertProspectsToEvents = (prospects: Prospect[]): CalendarEvent[] => {
+  return prospects.map((prospect) => {
+    const [day, month, year] = prospect.rappelLe.split("/")
+    const fullYear = year.length === 2 ? `20${year}` : year
+    return {
+      id: `prospect-${prospect.id}`,
+      title: `${prospect.nom} ${prospect.prenom} - ${prospect.produit}`,
+      startDate: `${fullYear}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`,
+      endDate: `${fullYear}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`,
+      type: "call",
+      description: `Agent: ${prospect.agent}\nStatut: ${prospect.statut}\nHeure: ${prospect.heure}`,
+    }
+  })
+}
 
 const getCalendarDays = (month: number, year: number, events: CalendarEvent[]) => {
   const firstDay = new Date(year, month, 1)
@@ -73,8 +89,18 @@ export function CalendarView() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
 
   useEffect(() => {
-    setEvents(eventService.getEvents())
+    const loadEvents = () => {
+      const manualEvents = eventService.getEvents()
+      const prospectEvents = convertProspectsToEvents(prospectsService.getProspects())
+      setEvents([...manualEvents, ...prospectEvents])
+    }
+
+    loadEvents()
     setIsLoaded(true)
+
+    const handleProspectsChange = () => loadEvents()
+    window.addEventListener("prospectsChanged", handleProspectsChange)
+    return () => window.removeEventListener("prospectsChanged", handleProspectsChange)
   }, [])
 
   const calendarDays = getCalendarDays(currentMonth, currentYear, events)
@@ -129,14 +155,18 @@ export function CalendarView() {
     } else {
       eventService.addEvent(event)
     }
-    setEvents(eventService.getEvents())
+    const manualEvents = eventService.getEvents()
+    const prospectEvents = convertProspectsToEvents(prospectsService.getProspects())
+    setEvents([...manualEvents, ...prospectEvents])
     setEventDialogOpen(false)
     setSelectedEvent(undefined)
   }
 
   const handleDeleteEvent = (eventId: string) => {
     eventService.deleteEvent(eventId)
-    setEvents(eventService.getEvents())
+    const manualEvents = eventService.getEvents()
+    const prospectEvents = convertProspectsToEvents(prospectsService.getProspects())
+    setEvents([...manualEvents, ...prospectEvents])
     setEventDialogOpen(false)
     setSelectedEvent(undefined)
   }

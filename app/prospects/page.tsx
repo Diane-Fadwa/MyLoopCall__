@@ -1,481 +1,239 @@
 "use client"
 
 import type React from "react"
-import { useState, useMemo } from "react"
-import {
-  PlusCircle,
-  Pencil,
-  Trash2,
-  FileText,
-  FileSpreadsheet,
-  File,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
-const PRODUITS = ["PAC", "PV", "ITE", "PAC ET ISOLATION", "MENUISERIE", "PRODUIT", "COMBLES"]
-const AGENTS = ["DIBA", "YVES", "LEILA", "MATAR", "KHALIDOU", "SAFA", "NAJOUA", "ABDOULAZIZ"]
-const ZONES = ["H1", "H2", "H3"]
-const PROFILS = ["BLEU", "JAUNE", "VIOLET", "ROSE"]
+import { useState, useEffect } from "react"
+import { Download, FileSpreadsheet, FileText, Plus, Search, Trash2, CalendarIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { useSidebar } from "@/contexts/sidebar-context"
+import { getAgents } from "@/lib/admin-data"
+import { prospectsService, type Prospect } from "@/lib/prospects-data"
+
+// Use dynamic data for ZONES and PROFILs, and load products/installers from localStorage
 const CONFIRMATEURS = ["YACINE", "SAFA", "LEILA"]
 const STATUTS = ["VALIDE", "ANNULATION", "RAPPEL YACINE", "NRP"]
-const INSTALLATEURS = [
-  "ARTHEM",
-  "HOME CONCEPT",
-  "AIR RENOV",
-  "FABRICE",
-  "THEO",
-  "JAJA SOLID R",
-  "AZREN ISOLATION",
-  "ISOTHERM",
-  "AMINE CAS",
-  "SOFIANE TUNISIEN LYON",
-  "SHEIREL HOME ECO",
-]
-
-const getProduitColor = (produit: string) => {
-  const colorMap: { [key: string]: string } = {
-    PAC: "bg-green-200 text-green-900",
-    PV: "bg-red-700 text-white",
-    ITE: "bg-blue-300 text-blue-900",
-    "PAC ET ISOLATION": "bg-gray-400 text-gray-900",
-    MENUISERIE: "bg-orange-300 text-orange-900",
-    PRODUIT: "bg-purple-300 text-purple-900",
-    COMBLES: "bg-yellow-300 text-yellow-900",
-  }
-  return colorMap[produit] || "bg-gray-200 text-gray-900"
-}
-
-const getAgentColor = (agent: string) => {
-  const colorMap: { [key: string]: string } = {
-    DIBA: "bg-purple-400 text-white",
-    YVES: "bg-pink-300 text-pink-900",
-    LEILA: "bg-indigo-300 text-indigo-900",
-    MATAR: "bg-teal-600 text-white",
-    KHALIDOU: "bg-yellow-400 text-yellow-900",
-    SAFA: "bg-rose-300 text-rose-900",
-    NAJOUA: "bg-purple-500 text-white",
-    ABDOULAZIZ: "bg-cyan-400 text-cyan-900",
-  }
-  return colorMap[agent] || "bg-gray-200 text-gray-900"
-}
-
-const getZoneColor = (zone: string) => {
-  const colorMap: { [key: string]: string } = {
-    H1: "bg-green-700 text-white",
-    H2: "bg-pink-300 text-pink-900",
-    H3: "bg-orange-400 text-orange-900",
-  }
-  return colorMap[zone] || "bg-gray-200 text-gray-900"
-}
-
-const getProfilColor = (profil: string) => {
-  const colorMap: { [key: string]: string } = {
-    BLEU: "bg-blue-600 text-white",
-    JAUNE: "bg-yellow-400 text-yellow-900",
-    VIOLET: "bg-purple-500 text-white",
-    ROSE: "bg-pink-400 text-pink-900",
-  }
-  return colorMap[profil] || "bg-gray-200 text-gray-900"
-}
-
-const getStatutColor = (statut: string) => {
-  const colorMap: { [key: string]: string } = {
-    VALIDE: "bg-green-600 text-white",
-    ANNULATION: "bg-red-600 text-white",
-    "RAPPEL YACINE": "bg-orange-500 text-white",
-    NRP: "bg-gray-500 text-white",
-  }
-  return colorMap[statut] || "bg-gray-200 text-gray-900"
-}
-
-interface Prospect {
-  id: number
-  date: string
-  rappelLe: string
-  heure: string
-  produit: string
-  agent: string
-  zone: string
-  profil: string
-  nom: string
-  prenom: string
-  adresse: string
-  codePostal: string
-  ville: string
-  numeroMobile: string
-  commentaire: string
-  confirmateur: string
-  statut: string
-  installateur: string
-}
-
-const initialProspects: Prospect[] = [
-  {
-    id: 1,
-    date: "10/12/2025",
-    rappelLe: "10/12/2025",
-    heure: "15:30",
-    produit: "PAC",
-    agent: "YVES",
-    zone: "H2",
-    profil: "BLEU",
-    nom: "VIDEAU",
-    prenom: "PHILIPPE",
-    adresse: "",
-    codePostal: "10150",
-    ville: "",
-    numeroMobile: "0618248760",
-    commentaire: "",
-    confirmateur: "YACINE",
-    statut: "VALIDE",
-    installateur: "ARTHEM",
-  },
-  {
-    id: 2,
-    date: "09/12/2025",
-    rappelLe: "10/12/2025",
-    heure: "17:00",
-    produit: "PAC ET ISOLATION",
-    agent: "DIBA",
-    zone: "H1",
-    profil: "BLEU",
-    nom: "CHOISELAT",
-    prenom: "CLARA",
-    adresse: "1 IMPASSE DES BONNETIERS",
-    codePostal: "10350",
-    ville: "PRUNAY BELLEVILLE",
-    numeroMobile: "0325215365",
-    commentaire: "Prop// plus 15ans//80m2//chauffage fioul condensation //la chaudière a plus 10ans",
-    confirmateur: "SAFA",
-    statut: "VALIDE",
-    installateur: "HOME CONCEPT",
-  },
-  {
-    id: 3,
-    date: "09/12/2025",
-    rappelLe: "10/12/2025",
-    heure: "17:00",
-    produit: "PAC",
-    agent: "KHALIDOU",
-    zone: "H1",
-    profil: "BLEU",
-    nom: "CHARBONNEL",
-    prenom: "RAYNAL",
-    adresse: "34 imp des roses mouleyre",
-    codePostal: "15270",
-    ville: "lanobre",
-    numeroMobile: "0656753306",
-    commentaire: "PRO +15 ANS SH// 120 m² à étage MAISON NON MITOYENNE GAZ DE VILLE EN PANNE",
-    confirmateur: "SAFA",
-    statut: "NRP",
-    installateur: "ISOTHERM",
-  },
-  {
-    id: 4,
-    date: "10/12/2025",
-    rappelLe: "10/12/2025",
-    heure: "17:00",
-    produit: "PAC ET ISOLATION",
-    agent: "KHALIDOU",
-    zone: "H2",
-    profil: "BLEU",
-    nom: "LAULAN",
-    prenom: "JEAN BERNARD",
-    adresse: "5 RUE ANATOLE FRANCE",
-    codePostal: "33210",
-    ville: "Langon",
-    numeroMobile: "609727887",
-    commentaire: "propriétair maison individuelle +15ans// superficie hbt chauffée 114m²",
-    confirmateur: "SAFA",
-    statut: "VALIDE",
-    installateur: "AIR RENOV",
-  },
-  {
-    id: 5,
-    date: "09/12/2025",
-    rappelLe: "10/12/2025",
-    heure: "17:00",
-    produit: "ITE",
-    agent: "YVES",
-    zone: "H2",
-    profil: "BLEU",
-    nom: "El Marnissi",
-    prenom: "AMAR",
-    adresse: "AVENUE Henri IV",
-    codePostal: "47130",
-    ville: "Saint-Laurent",
-    numeroMobile: "626831012",
-    commentaire: "MR A 5 MAISONS A FAIRE ISOLE // COMBLES +PAC AIR EAU DANS CHAQUE MAISON",
-    confirmateur: "SAFA",
-    statut: "NRP",
-    installateur: "HOME CONCEPT",
-  },
-  {
-    id: 6,
-    date: "08/12/2025",
-    rappelLe: "10/12/2025",
-    heure: "18:00",
-    produit: "ITE",
-    agent: "NAJOUA",
-    zone: "H2",
-    profil: "JAUNE",
-    nom: "Thao",
-    prenom: "LAURENT",
-    adresse: "1995 Rte de Montbartier",
-    codePostal: "82700",
-    ville: "Montech",
-    numeroMobile: "664152700",
-    commentaire: "pro//PAC INSTALLER A 2013 ///maison de 115m ///PLIEN PIED",
-    confirmateur: "SAFA",
-    statut: "NRP",
-    installateur: "HOME CONCEPT",
-  },
-  {
-    id: 7,
-    date: "09/12/2025",
-    rappelLe: "10/12/2025",
-    heure: "18:00",
-    produit: "PV",
-    agent: "DIBA",
-    zone: "H2",
-    profil: "BLEU",
-    nom: "WILFRIED",
-    prenom: "THIBAUT",
-    adresse: "11 RUE TOUSSAINT CHALOU",
-    codePostal: "49000",
-    ville: "SAINTE-GEMMES-SUR-LOIRE",
-    numeroMobile: "634252090",
-    commentaire: "Prop//plus 15ans//230m2// chauffage gaz //la chaudière elle a 2ans",
-    confirmateur: "SAFA",
-    statut: "NRP",
-    installateur: "AIR RENOV",
-  },
-  {
-    id: 8,
-    date: "09/12/2025",
-    rappelLe: "10/12/2025",
-    heure: "18:30",
-    produit: "PV",
-    agent: "YVES",
-    zone: "H1",
-    profil: "BLEU",
-    nom: "FOURNIER",
-    prenom: "MATHILDE",
-    adresse: "51 Av. du Maréchal Foch",
-    codePostal: "77450",
-    ville: "MONTRY",
-    numeroMobile: "698702610",
-    commentaire: "PRO MAISON +2ANS // CHAUF ELECT ET GAZ // FACTURE ELECT +120 EUROS PAR MOIS",
-    confirmateur: "SAFA",
-    statut: "VALIDE",
-    installateur: "SHEIREL HOME ECO",
-  },
-]
-
-const formatDateToDisplay = (dateStr: string) => {
-  if (!dateStr) return ""
-  if (dateStr.includes("/")) return dateStr
-  const [year, month, day] = dateStr.split("-")
-  return `${day}/${month}/${year}`
-}
-
-const formatDateToInput = (dateStr: string) => {
-  if (!dateStr) return ""
-  if (dateStr.includes("-")) return dateStr
-  const [day, month, year] = dateStr.split("/")
-  return `${year}-${month}-${day}`
-}
-
-// Helper function to format date for display, ensuring correct format
-const formatDateDisplay = (dateStr: string): string => {
-  if (!dateStr) return ""
-  try {
-    const date = new Date(dateStr)
-    const day = String(date.getDate()).padStart(2, "0")
-    const month = String(date.getMonth() + 1).padStart(2, "0") // Months are 0-indexed
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
-  } catch (error) {
-    console.error("Error formatting date:", dateStr, error)
-    return dateStr // Return original string if parsing fails
-  }
-}
-
-// Helper to parse date string from DD/MM/YYYY to Date object
-const parseDisplayDate = (dateStr: string): Date => {
-  if (!dateStr) return new Date()
-  const [day, month, year] = dateStr.split("/").map(Number)
-  return new Date(year, month - 1, day)
-}
+// Define ZONES and PROFILS here or import them if they are defined elsewhere
+const ZONES = ["H1", "H2", "H3"] // Example definition, adjust as needed
+const PROFILS = ["BLEU", "JAUNE", "VIOLET", "ROSE"] // Example definition, adjust as needed
 
 export default function ProspectsPage() {
-  const [prospects, setProspects] = useState<Prospect[]>(initialProspects)
-  const [showForm, setShowForm] = useState(false)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const { collapsed } = useSidebar()
 
+  const [prospects, setProspects] = useState<Prospect[]>([])
+  const [produits, setProduits] = useState<string[]>([])
+  const [agents, setAgents] = useState<string[]>([])
+  const [installateurs, setInstallateurs] = useState<string[]>([])
+
+  const [searchTerm, setSearchTerm] = useState("")
   const [filterAgent, setFilterAgent] = useState("")
   const [filterConfirmateur, setFilterConfirmateur] = useState("")
   const [filterStatut, setFilterStatut] = useState("")
   const [filterProduit, setFilterProduit] = useState("")
-
   const [itemsPerPage, setItemsPerPage] = useState(50)
   const [currentPage, setCurrentPage] = useState(1)
+  const [showModal, setShowModal] = useState(false)
+  const [editingProspect, setEditingProspect] = useState<Prospect | null>(null) // Not currently used but kept for potential future use
+  const [showDateModal, setShowDateModal] = useState(false)
+  const [dateModalField, setDateModalField] = useState<"date" | "rappelLe">("date")
+  const [editingProspectId, setEditingProspectId] = useState<number | null>(null)
+  const [tempDate, setTempDate] = useState("")
+  const [showTextModal, setShowTextModal] = useState(false)
+  const [textModalField, setTextModalField] = useState<"adresse" | "commentaire">("adresse")
+  const [tempText, setTempText] = useState("")
 
-  const [formData, setFormData] = useState<Prospect>({
-    id: 0, // Will be replaced on add
+  const [newProspect, setNewProspect] = useState<Omit<Prospect, "id">>({
     date: "",
     rappelLe: "",
     heure: "",
-    produit: "PAC",
-    agent: "DIBA",
-    zone: "H1",
-    profil: "BLEU",
+    produit: "",
+    agent: "",
+    zone: "",
+    profil: "",
     nom: "",
     prenom: "",
     adresse: "",
     codePostal: "",
     ville: "",
-    numeroMobile: "",
+    mobile: "",
     commentaire: "",
-    confirmateur: "YACINE",
-    statut: "VALIDE",
-    installateur: "ARTHEM",
+    confirmateur: "",
+    statut: "",
+    installateur: "",
   })
+  const [showForm, setShowForm] = useState(false) // State to control the visibility of the new prospect form
 
-  const [calendarView, setCalendarView] = useState({ month: new Date().getMonth(), year: new Date().getFullYear() })
+  // Load initial data and set up listeners
+  useEffect(() => {
+    setProspects(prospectsService.getProspects())
 
-  const getDaysInMonth = (month: number, year: number) => {
-    return new Array(31)
-      .fill(null)
-      .map((_, i) => new Date(year, month, i + 1))
-      .filter((date) => date.getMonth() === month)
-  }
+    const loadAdminData = () => {
+      // Load products and installateurs from localStorage
+      const storedProduits = localStorage.getItem("admin_produits")
+      setProduits(storedProduits ? JSON.parse(storedProduits).map((p: any) => p.nom) : [])
 
-  const getFirstDayOfMonth = (month: number, year: number) => {
-    return new Date(year, month, 1).getDay()
-  }
+      const loadedAgents = getAgents()
+      setAgents(loadedAgents.filter((a) => a.actif).map((a) => a.nom))
 
-  const handleCalendarDateSelect = (day: number) => {
-    const selectedDate = new Date(calendarView.year, calendarView.month, day)
-    const formatted = selectedDate.toISOString().split("T")[0]
-    setDatePickerState({ ...datePickerState, currentValue: formatted })
-    saveDateFromPicker(formatted)
-  }
-
-  const changeCalendarMonth = (delta: number) => {
-    let newMonth = calendarView.month + delta
-    let newYear = calendarView.year
-
-    if (newMonth > 11) {
-      newMonth = 0
-      newYear++
-    } else if (newMonth < 0) {
-      newMonth = 11
-      newYear--
+      const storedInstallateurs = localStorage.getItem("admin_installateurs")
+      setInstallateurs(storedInstallateurs ? JSON.parse(storedInstallateurs).map((i: any) => i.nom) : [])
     }
 
-    setCalendarView({ month: newMonth, year: newYear })
+    loadAdminData()
+
+    // Listen for custom event when admin data changes
+    const handleAdminChange = () => {
+      loadAdminData()
+    }
+    window.addEventListener("adminDataChanged", handleAdminChange)
+
+    return () => {
+      window.removeEventListener("adminDataChanged", handleAdminChange)
+    }
+  }, [])
+
+  // Dynamically update newProspect defaults when data loads
+  useEffect(() => {
+    setNewProspect((prev) => ({
+      ...prev,
+      produit: produits[0] || prev.produit,
+      agent: agents[0] || prev.agent,
+      installateur: installateurs[0] || prev.installateur,
+      zone: ZONES[0] || prev.zone,
+      profil: PROFILS[0] || prev.profil,
+      confirmateur: CONFIRMATEURS[0] || prev.confirmateur,
+      statut: STATUTS[0] || prev.statut,
+    }))
+  }, [produits, agents, installateurs])
+
+  const filteredProspects = prospects.filter((prospect) => {
+    const matchesSearch =
+      prospect.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      prospect.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      prospect.mobile.includes(searchTerm)
+
+    const matchesAgent = !filterAgent || prospect.agent === filterAgent
+    const matchesConfirmateur = !filterConfirmateur || prospect.confirmateur === filterConfirmateur
+    const matchesStatut = !filterStatut || prospect.statut === filterStatut
+    const matchesProduit = !filterProduit || prospect.produit === filterProduit
+
+    return matchesSearch && matchesAgent && matchesConfirmateur && matchesStatut && matchesProduit
+  })
+
+  const totalPages = Math.ceil(filteredProspects.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedProspects = filteredProspects.slice(startIndex, startIndex + itemsPerPage)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, filterAgent, filterConfirmateur, filterStatut, filterProduit, itemsPerPage])
+
+  const formatDateForInput = (dateStr: string) => {
+    if (!dateStr) return ""
+    // Handles YYYY-MM-DD from input type="date"
+    if (dateStr.includes("-")) {
+      return dateStr
+    }
+    // Handles DD/MM/YYYY from current logic
+    const parts = dateStr.split("/")
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`
+    }
+    return "" // Return empty string if format is unexpected
   }
 
-  const [datePickerState, setDatePickerState] = useState<{
-    isOpen: boolean
-    prospectId: number
-    field: "date" | "rappelLe"
-    currentValue: string
-  }>({ isOpen: false, prospectId: 0, field: "date", currentValue: "" })
-
-  const [textModalState, setTextModalState] = useState<{
-    isOpen: boolean
-    prospectId: number
-    field: "commentaire" | "adresse"
-    currentValue: string
-  }>({ isOpen: false, prospectId: 0, field: "commentaire", currentValue: "" })
+  const formatDateForDisplay = (dateStr: string) => {
+    if (!dateStr) return ""
+    // Handles YYYY-MM-DD from input type="date"
+    if (dateStr.includes("-")) {
+      const parts = dateStr.split("-")
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`
+      }
+    }
+    // Handles DD/MM/YYYY from current logic
+    return dateStr
+  }
 
   const handleAddProspect = (e: React.FormEvent) => {
     e.preventDefault()
-    if (formData.nom && formData.prenom && formData.numeroMobile) {
-      const prospectData = {
-        ...formData,
-        date: formatDateToDisplay(formData.date),
-        rappelLe: formatDateToDisplay(formData.rappelLe),
-      }
-
-      if (editingId !== null) {
-        setProspects(prospects.map((p) => (p.id === editingId ? { id: editingId, ...prospectData } : p)))
-        setEditingId(null)
-      } else {
-        setProspects([...prospects, { id: Math.max(...prospects.map((p) => p.id), 0) + 1, ...prospectData }])
-      }
-      setFormData({
-        id: 0,
-        date: "",
-        rappelLe: "",
-        heure: "",
-        produit: "PAC",
-        agent: "DIBA",
-        zone: "H1",
-        profil: "BLEU",
-        nom: "",
-        prenom: "",
-        adresse: "",
-        codePostal: "",
-        ville: "",
-        numeroMobile: "",
-        commentaire: "",
-        confirmateur: "YACINE",
-        statut: "VALIDE",
-        installateur: "ARTHEM",
-      })
-      setShowForm(false)
+    const prospectToAdd: Omit<Prospect, "id"> = {
+      ...newProspect,
+      date: formatDateForDisplay(newProspect.date),
+      rappelLe: formatDateForDisplay(newProspect.rappelLe),
     }
+    prospectsService.addProspect(prospectToAdd)
+    setProspects(prospectsService.getProspects())
+    setShowForm(false) // Close the form after adding
+    setNewProspect({
+      // Reset the form
+      date: "",
+      rappelLe: "",
+      heure: "",
+      produit: produits[0] || "",
+      agent: agents[0] || "",
+      zone: ZONES[0] || "",
+      profil: PROFILS[0] || "",
+      nom: "",
+      prenom: "",
+      adresse: "",
+      codePostal: "",
+      ville: "",
+      mobile: "",
+      commentaire: "",
+      confirmateur: CONFIRMATEURS[0] || "",
+      statut: STATUTS[0] || "",
+      installateur: installateurs[0] || "",
+    })
   }
 
   const handleDeleteProspect = (id: number) => {
     if (confirm("Êtes-vous sûr de vouloir supprimer ce prospect ?")) {
-      setProspects(prospects.filter((p) => p.id !== id))
+      prospectsService.deleteProspect(id)
+      setProspects(prospectsService.getProspects())
     }
   }
 
-  const handleEditProspect = (prospect: Prospect) => {
-    setEditingId(prospect.id)
-    setFormData({ ...prospect })
-    setShowForm(true)
+  const handleFieldChange = (id: number, field: keyof Prospect, value: string) => {
+    const updatedProspects = prospects.map((p) => (p.id === id ? { ...p, [field]: value } : p))
+    setProspects(updatedProspects)
+    prospectsService.saveProspects(updatedProspects) // Save to local storage
   }
 
-  const handleFieldChange = (id: number, field: string, value: string) => {
-    setProspects(prospects.map((p) => (p.id === id ? { ...p, [field]: value } : p)))
+  const openDateModal = (prospectId: number, field: "date" | "rappelLe", currentValue: string) => {
+    setEditingProspectId(prospectId)
+    setDateModalField(field)
+    setTempDate(currentValue)
+    setShowDateModal(true)
   }
 
-  const filteredProspects = useMemo(() => {
-    return prospects.filter((p) => {
-      const matchesSearch =
-        p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.numeroMobile.includes(searchTerm)
+  const saveDateChange = () => {
+    if (editingProspectId !== null) {
+      handleFieldChange(editingProspectId, dateModalField, tempDate)
+    }
+    setShowDateModal(false)
+    setEditingProspectId(null)
+    setTempDate("")
+  }
 
-      const matchesAgent = !filterAgent || p.agent === filterAgent
-      const matchesConfirmateur = !filterConfirmateur || p.confirmateur === filterConfirmateur
-      const matchesStatut = !filterStatut || p.statut === filterStatut
-      const matchesProduit = !filterProduit || p.produit === filterProduit
+  const openTextModal = (prospectId: number, field: "adresse" | "commentaire", currentValue: string) => {
+    setEditingProspectId(prospectId)
+    setTextModalField(field)
+    setTempText(currentValue)
+    setShowTextModal(true)
+  }
 
-      return matchesSearch && matchesAgent && matchesConfirmateur && matchesStatut && matchesProduit
-    })
-  }, [prospects, searchTerm, filterAgent, filterConfirmateur, filterStatut, filterProduit])
+  const saveTextChange = () => {
+    if (editingProspectId !== null) {
+      handleFieldChange(editingProspectId, textModalField, tempText)
+    }
+    setShowTextModal(false)
+    setEditingProspectId(null)
+    setTempText("")
+  }
 
-  const totalPages = Math.ceil(filteredProspects.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const paginatedProspects = filteredProspects.slice(startIndex, endIndex)
-
-  const handleFilterChange = (setter: (value: string) => void, value: string) => {
-    setter(value)
-    setCurrentPage(1)
+  const exportToPDF = () => {
+    window.print()
   }
 
   const exportToCSV = () => {
@@ -498,7 +256,6 @@ export default function ProspectsPage() {
       "STATUT",
       "INSTALLATEUR",
     ]
-
     const csvContent = [
       headers.join(","),
       ...filteredProspects.map((p) =>
@@ -512,11 +269,11 @@ export default function ProspectsPage() {
           p.profil,
           p.nom,
           p.prenom,
-          p.adresse,
+          p.adresse.replace(/,/g, " "),
           p.codePostal,
           p.ville,
-          p.numeroMobile,
-          `"${p.commentaire.replace(/"/g, '""')}"`,
+          p.mobile,
+          p.commentaire.replace(/,/g, " "),
           p.confirmateur,
           p.statut,
           p.installateur,
@@ -527,185 +284,280 @@ export default function ProspectsPage() {
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const link = document.createElement("a")
     link.href = URL.createObjectURL(blob)
-    link.download = `prospects_${new Date().toISOString().split("T")[0]}.csv`
+    link.download = "prospects.csv"
     link.click()
   }
 
   const exportToExcel = () => {
-    exportToCSV() // Excel can open CSV files
-  }
-
-  const exportToPDF = () => {
-    const printWindow = window.open("", "_blank")
-    if (!printWindow) return
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Prospects</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 20px; }
-          h1 { text-align: center; margin-bottom: 20px; }
-          table { width: 100%; border-collapse: collapse; font-size: 10px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          th { background-color: #000; color: white; }
-          @media print {
-            body { margin: 0; }
-            @page { size: landscape; }
-          }
-        </style>
-      </head>
-      <body>
-        <h1>Liste des Prospects</h1>
-        <table>
-          <thead>
-            <tr>
-              <th>DATE</th>
-              <th>RAPPEL LE</th>
-              <th>HEURE</th>
-              <th>PRODUIT</th>
-              <th>AGENT</th>
-              <th>ZONE</th>
-              <th>PROFIL</th>
-              <th>Nom</th>
-              <th>Prenom</th>
-              <th>Adresse</th>
-              <th>CP</th>
-              <th>Ville</th>
-              <th>Mobile</th>
-              <th>Commentaire</th>
-              <th>CONFIRMATEUR</th>
-              <th>STATUT</th>
-              <th>INSTALLATEUR</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${filteredProspects
-              .map(
-                (p) => `
-              <tr>
-                <td>${p.date}</td>
-                <td>${p.rappelLe}</td>
-                <td>${p.heure}</td>
-                <td>${p.produit}</td>
-                <td>${p.agent}</td>
-                <td>${p.zone}</td>
-                <td>${p.profil}</td>
-                <td>${p.nom}</td>
-                <td>${p.prenom}</td>
-                <td>${p.adresse}</td>
-                <td>${p.codePostal}</td>
-                <td>${p.ville}</td>
-                <td>${p.numeroMobile}</td>
-                <td>${p.commentaire}</td>
-                <td>${p.confirmateur}</td>
-                <td>${p.statut}</td>
-                <td>${p.installateur}</td>
-              </tr>
-            `,
-              )
-              .join("")}
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `
-
-    printWindow.document.write(htmlContent)
-    printWindow.document.close()
-    setTimeout(() => {
-      printWindow.print()
-    }, 250)
-  }
-
-  // Set calendar view when opening date picker
-  const openDatePicker = (prospectId: number, field: "date" | "rappelLe", currentValue: string) => {
-    const dateValue = currentValue ? parseDisplayDate(currentValue) : new Date()
-    setCalendarView({ month: dateValue.getMonth(), year: dateValue.getFullYear() })
-    setDatePickerState({
-      isOpen: true,
-      prospectId,
-      field,
-      currentValue: formatDateToInput(currentValue),
+    const headers = [
+      "DATE",
+      "RAPPEL LE",
+      "HEURE",
+      "PRODUIT",
+      "AGENT",
+      "ZONE",
+      "PROFIL",
+      "Nom",
+      "Prenom",
+      "Adresse",
+      "Code postal",
+      "Ville",
+      "Mobile",
+      "Commentaire",
+      "CONFIRMATEUR",
+      "STATUT",
+      "INSTALLATEUR",
+    ]
+    let excelContent = "<table><thead><tr>"
+    headers.forEach((h) => {
+      excelContent += `<th>${h}</th>`
     })
+    excelContent += "</tr></thead><tbody>"
+
+    filteredProspects.forEach((p) => {
+      excelContent += `<tr>
+        <td>${p.date}</td>
+        <td>${p.rappelLe}</td>
+        <td>${p.heure}</td>
+        <td>${p.produit}</td>
+        <td>${p.agent}</td>
+        <td>${p.zone}</td>
+        <td>${p.profil}</td>
+        <td>${p.nom}</td>
+        <td>${p.prenom}</td>
+        <td>${p.adresse}</td>
+        <td>${p.codePostal}</td>
+        <td>${p.ville}</td>
+        <td>${p.mobile}</td>
+        <td>${p.commentaire}</td>
+        <td>${p.confirmateur}</td>
+        <td>${p.statut}</td>
+        <td>${p.installateur}</td>
+      </tr>`
+    })
+    excelContent += "</tbody></table>"
+
+    const blob = new Blob([excelContent], { type: "application/vnd.ms-excel" })
+    const link = document.createElement("a")
+    link.href = URL.createObjectURL(blob)
+    link.download = "prospects.xls"
+    link.click()
   }
 
-  const saveDateFromPicker = (newDate: string) => {
-    if (newDate) {
-      const formattedDate = formatDateDisplay(newDate) // Use the new helper function
-      handleFieldChange(datePickerState.prospectId, datePickerState.field, formattedDate)
+  const resetFilters = () => {
+    setFilterAgent("")
+    setFilterConfirmateur("")
+    setFilterStatut("")
+    setFilterProduit("")
+    setSearchTerm("")
+  }
+
+  const getColorClass = (field: string, value: string) => {
+    switch (field) {
+      case "produit":
+        if (value === "PAC") return "bg-green-200 text-green-900"
+        if (value === "PV") return "bg-red-600 text-white"
+        if (value === "ITE") return "bg-blue-300 text-blue-900"
+        if (value === "PAC ET ISOLATION") return "bg-gray-300 text-gray-900"
+        if (value === "MENUISERIE") return "bg-yellow-300 text-yellow-900"
+        if (value === "PRODUIT") return "bg-purple-300 text-purple-900"
+        if (value === "COMBLES") return "bg-orange-300 text-orange-900"
+        return "bg-gray-200 text-gray-900"
+
+      case "agent":
+        if (value === "YVES") return "bg-pink-200 text-pink-900"
+        if (value === "DIBA") return "bg-purple-200 text-purple-900"
+        if (value === "KHALIDOU") return "bg-yellow-200 text-yellow-900"
+        if (value === "NAJOUA") return "bg-purple-400 text-white"
+        if (value === "LEILA") return "bg-pink-300 text-pink-900"
+        if (value === "MATAR") return "bg-teal-500 text-white"
+        if (value === "SAFA") return "bg-indigo-300 text-indigo-900"
+        if (value === "ABDOULAZIZ") return "bg-amber-300 text-amber-900"
+        return "bg-gray-200 text-gray-900"
+
+      case "zone":
+        if (value === "H1") return "bg-green-600 text-white"
+        if (value === "H2") return "bg-pink-300 text-pink-900"
+        if (value === "H3") return "bg-yellow-400 text-yellow-900"
+        return "bg-gray-200 text-gray-900"
+
+      case "profil":
+        if (value === "BLEU") return "bg-blue-600 text-white"
+        if (value === "JAUNE") return "bg-yellow-400 text-yellow-900"
+        if (value === "VIOLET") return "bg-purple-600 text-white"
+        if (value === "ROSE") return "bg-pink-400 text-pink-900"
+        return "bg-gray-200 text-gray-900"
+
+      case "confirmateur":
+        if (value === "YACINE") return "bg-blue-500 text-white"
+        if (value === "SAFA") return "bg-purple-500 text-white"
+        if (value === "LEILA") return "bg-pink-500 text-white"
+        return "bg-gray-200 text-gray-900"
+
+      case "statut":
+        if (value === "VALIDE") return "bg-green-500 text-white"
+        if (value === "ANNULATION") return "bg-red-500 text-white"
+        if (value === "RAPPEL YACINE") return "bg-orange-500 text-white"
+        if (value === "NRP") return "bg-gray-500 text-white"
+        return "bg-gray-200 text-gray-900"
+
+      case "installateur":
+        return "bg-gray-200 text-gray-700"
+
+      default:
+        return ""
     }
-    setDatePickerState({ isOpen: false, prospectId: 0, field: "date", currentValue: "" })
   }
 
-  const openTextModal = (prospectId: number, field: "commentaire" | "adresse", currentValue: string) => {
-    setTextModalState({
-      isOpen: true,
-      prospectId,
-      field,
-      currentValue,
+  const CalendarPicker = ({
+    currentDate,
+    onSelectDate,
+  }: { currentDate: string; onSelectDate: (date: string) => void }) => {
+    const [viewDate, setViewDate] = useState(() => {
+      if (currentDate) {
+        const parts = currentDate.split("/")
+        if (parts.length === 3) {
+          return new Date(Number.parseInt(parts[2]), Number.parseInt(parts[1]) - 1, Number.parseInt(parts[0]))
+        }
+      }
+      return new Date()
     })
-  }
 
-  const saveTextFromModal = () => {
-    handleFieldChange(textModalState.prospectId, textModalState.field, textModalState.currentValue)
-    setTextModalState({ isOpen: false, prospectId: 0, field: "commentaire", currentValue: "" })
+    const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate()
+    const firstDayOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay()
+    const adjustedFirstDay = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1
+
+    const prevMonth = () => {
+      setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1))
+    }
+
+    const nextMonth = () => {
+      setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1))
+    }
+
+    const selectDate = (day: number) => {
+      const selected = `${String(day).padStart(2, "0")}/${String(viewDate.getMonth() + 1).padStart(2, "0")}/${viewDate.getFullYear()}`
+      onSelectDate(selected)
+    }
+
+    const monthNames = [
+      "Janvier",
+      "Février",
+      "Mars",
+      "Avril",
+      "Mai",
+      "Juin",
+      "Juillet",
+      "Août",
+      "Septembre",
+      "Octobre",
+      "Novembre",
+      "Décembre",
+    ]
+
+    return (
+      <div className="bg-white p-4 rounded-lg">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={prevMonth} className="px-3 py-1 hover:bg-gray-100 rounded">
+            ←
+          </button>
+          <div className="font-semibold">
+            {monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}
+          </div>
+          <button onClick={nextMonth} className="px-3 py-1 hover:bg-gray-100 rounded">
+            →
+          </button>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-center text-sm">
+          {["L", "M", "M", "J", "V", "S", "D"].map((day) => (
+            <div key={day} className="font-semibold text-gray-600 p-2">
+              {day}
+            </div>
+          ))}
+          {Array.from({ length: adjustedFirstDay }).map((_, i) => (
+            <div key={`empty-${i}`} />
+          ))}
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const day = i + 1
+            const isToday =
+              day === new Date().getDate() &&
+              viewDate.getMonth() === new Date().getMonth() &&
+              viewDate.getFullYear() === new Date().getFullYear()
+            const isSelected =
+              currentDate ===
+              `${String(day).padStart(2, "0")}/${String(viewDate.getMonth() + 1).padStart(2, "0")}/${viewDate.getFullYear()}`
+
+            return (
+              <button
+                key={day}
+                onClick={() => selectDate(day)}
+                className={`p-2 rounded hover:bg-blue-100 ${isToday ? "border-2 border-blue-500" : ""} ${
+                  isSelected ? "bg-blue-600 text-white hover:bg-blue-700" : ""
+                }`}
+              >
+                {day}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="p-6 space-y-6 transition-all duration-300">
-      {" "}
-      {/* Added transition */}
-      <div className="flex items-center justify-between">
+    <div className={`p-6 transition-all duration-300 ${collapsed ? "ml-0" : "ml-0"}`}>
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Prospects</h1>
-          <p className="text-gray-500 mt-1">Gérez vos prospects et rendez-vous</p>
+          <h1 className="text-3xl font-bold">Prospects</h1>
+          <p className="text-gray-600">Gérez vos prospects et rendez-vous</p>
         </div>
         <div className="flex gap-2">
-          <div className="flex gap-1 mr-2">
-            <Button onClick={exportToPDF} variant="outline" size="sm" title="Exporter en PDF">
-              <FileText className="h-4 w-4 mr-1" />
-              PDF
-            </Button>
-            <Button onClick={exportToCSV} variant="outline" size="sm" title="Exporter en CSV">
-              <File className="h-4 w-4 mr-1" />
-              CSV
-            </Button>
-            <Button onClick={exportToExcel} variant="outline" size="sm" title="Exporter en Excel">
-              <FileSpreadsheet className="h-4 w-4 mr-1" />
-              Excel
-            </Button>
-          </div>
+          <Button variant="outline" onClick={exportToPDF}>
+            <FileText className="w-4 h-4 mr-2" />
+            PDF
+          </Button>
+          <Button variant="outline" onClick={exportToCSV}>
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            CSV
+          </Button>
+          <Button variant="outline" onClick={exportToExcel}>
+            <Download className="w-4 h-4 mr-2" />
+            Excel
+          </Button>
           <Button onClick={() => setShowForm(true)}>
-            <PlusCircle className="h-4 w-4 mr-2" />
+            {" "}
+            {/* Changed to control the form visibility */}
+            <Plus className="w-4 h-4 mr-2" />
             Nouveau prospect
           </Button>
         </div>
       </div>
-      <div className="bg-white p-4 rounded-lg border border-gray-200 space-y-4">
-        <div className="flex gap-4 items-end flex-wrap">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Rechercher</label>
-            <Input
-              placeholder="Nom, prénom ou téléphone..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value)
-                setCurrentPage(1)
-              }}
-            />
+
+      <div className="bg-white p-4 rounded-lg shadow mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Rechercher</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Nom, prénom ou téléphone..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 border rounded-md"
+              />
+            </div>
           </div>
 
-          <div className="min-w-[150px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Agent</label>
+          <div>
+            <label className="block text-sm font-medium mb-1">Agent</label>
             <select
               value={filterAgent}
-              onChange={(e) => handleFilterChange(setFilterAgent, e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => setFilterAgent(e.target.value)}
+              className="w-full p-2 border rounded-md"
             >
               <option value="">Tous</option>
-              {AGENTS.map((agent) => (
+              {agents.map((agent) => (
                 <option key={agent} value={agent}>
                   {agent}
                 </option>
@@ -713,476 +565,192 @@ export default function ProspectsPage() {
             </select>
           </div>
 
-          <div className="min-w-[150px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirmateur</label>
+          <div>
+            <label className="block text-sm font-medium mb-1">Confirmateur</label>
             <select
               value={filterConfirmateur}
-              onChange={(e) => handleFilterChange(setFilterConfirmateur, e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => setFilterConfirmateur(e.target.value)}
+              className="w-full p-2 border rounded-md"
             >
               <option value="">Tous</option>
-              {CONFIRMATEURS.map((confirmateur) => (
-                <option key={confirmateur} value={confirmateur}>
-                  {confirmateur}
+              {CONFIRMATEURS.map((conf) => (
+                <option key={conf} value={conf}>
+                  {conf}
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="min-w-[150px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+          <div>
+            <label className="block text-sm font-medium mb-1">Statut</label>
             <select
               value={filterStatut}
-              onChange={(e) => handleFilterChange(setFilterStatut, e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => setFilterStatut(e.target.value)}
+              className="w-full p-2 border rounded-md"
             >
               <option value="">Tous</option>
-              {STATUTS.map((statut) => (
-                <option key={statut} value={statut}>
-                  {statut}
+              {STATUTS.map((stat) => (
+                <option key={stat} value={stat}>
+                  {stat}
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="min-w-[150px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Produit</label>
+          <div>
+            <label className="block text-sm font-medium mb-1">Produit</label>
             <select
               value={filterProduit}
-              onChange={(e) => handleFilterChange(setFilterProduit, e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => setFilterProduit(e.target.value)}
+              className="w-full p-2 border rounded-md"
             >
               <option value="">Tous</option>
-              {PRODUITS.map((produit) => (
-                <option key={produit} value={produit}>
-                  {produit}
+              {produits.map((prod) => (
+                <option key={prod} value={prod}>
+                  {prod}
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+
+        <Button variant="outline" size="sm" onClick={resetFilters}>
+          Réinitialiser les filtres
+        </Button>
+      </div>
+
+      <div className="bg-white rounded-lg shadow mb-4">
+        <div className="p-4 flex justify-between items-center border-b">
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600">Afficher par:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => setItemsPerPage(Number(e.target.value))}
+              className="px-3 py-1 border rounded-md text-sm"
+            >
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={200}>200</option>
+              <option value={500}>500</option>
+            </select>
+            <span className="text-sm text-gray-600">
+              Affichage de {startIndex + 1} à {Math.min(startIndex + itemsPerPage, filteredProspects.length)} sur{" "}
+              {filteredProspects.length} prospects
+            </span>
           </div>
 
-          <Button
-            onClick={() => {
-              setFilterAgent("")
-              setFilterConfirmateur("")
-              setFilterStatut("")
-              setFilterProduit("")
-              setSearchTerm("")
-              setCurrentPage(1)
-            }}
-            variant="outline"
-          >
-            Réinitialiser les filtres
-          </Button>
-        </div>
-      </div>
-      {showForm && (
-        <div className="bg-gradient-to-r from-blue-50 to-white border border-blue-200 rounded-lg p-6 shadow-md">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">
-              {editingId ? "Modifier le prospect" : "Ajouter un nouveau prospect"}
-            </h3>
-            <button onClick={() => setShowForm(false)} className="text-gray-500 hover:text-gray-700">
-              ✕
-            </button>
-          </div>
-          <form onSubmit={handleAddProspect} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Input
-              type="date"
-              value={formatDateToInput(formData.date)}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-            <Input
-              type="date"
-              value={formatDateToInput(formData.rappelLe)}
-              onChange={(e) => setFormData({ ...formData, rappelLe: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-            <textarea
-              value={formData.heure}
-              onChange={(e) => setFormData({ ...formData, heure: e.target.value })}
-              placeholder="Ex: 17:00 sinon envoie SMS"
-              className="px-3 py-2 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"
-              rows={1}
-            />
-            <select
-              value={formData.produit}
-              onChange={(e) => setFormData({ ...formData, produit: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {PRODUITS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            <select
-              value={formData.agent}
-              onChange={(e) => setFormData({ ...formData, agent: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {AGENTS.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-            <select
-              value={formData.zone}
-              onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {ZONES.map((z) => (
-                <option key={z} value={z}>
-                  {z}
-                </option>
-              ))}
-            </select>
-            <select
-              value={formData.profil}
-              onChange={(e) => setFormData({ ...formData, profil: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {PROFILS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            <Input
-              type="text"
-              placeholder="Nom *"
-              required
-              value={formData.nom}
-              onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <Input
-              type="text"
-              placeholder="Prénom *"
-              required
-              value={formData.prenom}
-              onChange={(e) => setFormData({ ...formData, prenom: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <Input
-              type="text"
-              placeholder="Adresse"
-              value={formData.adresse}
-              onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <Input
-              type="text"
-              placeholder="Code Postal"
-              value={formData.codePostal}
-              onChange={(e) => setFormData({ ...formData, codePostal: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <Input
-              type="text"
-              placeholder="Ville"
-              value={formData.ville}
-              onChange={(e) => setFormData({ ...formData, ville: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <Input
-              type="tel"
-              placeholder="Numéro de mobile *"
-              required
-              value={formData.numeroMobile}
-              onChange={(e) => setFormData({ ...formData, numeroMobile: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <Input
-              type="text"
-              placeholder="Commentaire"
-              value={formData.commentaire}
-              onChange={(e) => setFormData({ ...formData, commentaire: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 col-span-1 md:col-span-2"
-            />
-            <select
-              value={formData.confirmateur}
-              onChange={(e) => setFormData({ ...formData, confirmateur: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {CONFIRMATEURS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-            <select
-              value={formData.statut}
-              onChange={(e) => setFormData({ ...formData, statut: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {STATUTS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <select
-              value={formData.installateur}
-              onChange={(e) => setFormData({ ...formData, installateur: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {INSTALLATEURS.map((i) => (
-                <option key={i} value={i}>
-                  {i}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center gap-2">
             <Button
-              type="submit"
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-medium transition-colors col-span-1 md:col-span-2 lg:col-span-3"
+              variant="outline"
+              size="sm"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(currentPage - 1)}
             >
-              {editingId ? "Modifier le prospect" : "Ajouter le prospect"}
+              Précédent
             </Button>
-          </form>
-        </div>
-      )}
-      <div className="bg-white p-4 rounded-lg border border-gray-200 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Afficher par:</span>
-          <select
-            value={itemsPerPage}
-            onChange={(e) => {
-              setItemsPerPage(Number(e.target.value))
-              setCurrentPage(1)
-            }}
-            className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-            <option value={200}>200</option>
-            <option value={500}>500</option>
-          </select>
-          <span className="text-sm text-gray-700 ml-4">
-            Affichage de {startIndex + 1} à {Math.min(endIndex, filteredProspects.length)} sur{" "}
-            {filteredProspects.length} prospects
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            variant="outline"
-            size="sm"
-          >
-            Précédent
-          </Button>
-          <span className="text-sm text-gray-700">
-            Page {currentPage} sur {totalPages || 1}
-          </span>
-          <Button
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages || totalPages === 0}
-            variant="outline"
-            size="sm"
-          >
-            Suivant
-          </Button>
-        </div>
-      </div>
-      <Dialog
-        open={datePickerState.isOpen}
-        onOpenChange={(open) =>
-          !open && setDatePickerState({ isOpen: false, prospectId: 0, field: "date", currentValue: "" })
-        }
-      >
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Sélectionner une date</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            {/* Calendar Header */}
-            <div className="flex items-center justify-between mb-4 px-2">
-              <button
-                onClick={() => changeCalendarMonth(-1)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <div className="font-semibold text-lg">
-                {new Date(calendarView.year, calendarView.month).toLocaleDateString("fr-FR", {
-                  month: "long",
-                  year: "numeric",
-                })}
-              </div>
-              <button
-                onClick={() => changeCalendarMonth(1)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-1">
-              {/* Day Headers */}
-              {["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"].map((day) => (
-                <div key={day} className="text-center text-sm font-semibold text-gray-600 py-2">
-                  {day}
-                </div>
-              ))}
-
-              {/* Empty cells for days before month starts */}
-              {Array.from({ length: getFirstDayOfMonth(calendarView.month, calendarView.year) }).map((_, i) => (
-                <div key={`empty-${i}`} />
-              ))}
-
-              {/* Calendar Days */}
-              {getDaysInMonth(calendarView.month, calendarView.year).map((date) => {
-                const day = date.getDate()
-                const isToday = date.toDateString() === new Date().toDateString()
-                const isSelected =
-                  datePickerState.currentValue ===
-                  new Date(calendarView.year, calendarView.month, day).toISOString().split("T")[0]
-
-                return (
-                  <button
-                    key={day}
-                    onClick={() => handleCalendarDateSelect(day)}
-                    className={`
-                      p-2 text-center rounded-lg transition-all hover:bg-blue-50 relative
-                      ${isSelected ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
-                      ${isToday && !isSelected ? "border-2 border-blue-400" : ""}
-                    `}
-                  >
-                    {day}
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="flex gap-2 justify-end mt-4">
-              <Button
-                variant="outline"
-                onClick={() => setDatePickerState({ isOpen: false, prospectId: 0, field: "date", currentValue: "" })}
-              >
-                Annuler
-              </Button>
-            </div>
+            <span className="text-sm">
+              Page {currentPage} sur {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(currentPage + 1)}
+            >
+              Suivant
+            </Button>
           </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={textModalState.isOpen}
-        onOpenChange={(open) =>
-          !open && setTextModalState({ isOpen: false, prospectId: 0, field: "commentaire", currentValue: "" })
-        }
-      >
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>{textModalState.field === "commentaire" ? "Commentaire" : "Adresse"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <textarea
-              value={textModalState.currentValue}
-              onChange={(e) => setTextModalState({ ...textModalState, currentValue: e.target.value })}
-              className="w-full min-h-[200px] p-3 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-y"
-              placeholder={
-                textModalState.field === "commentaire" ? "Entrez votre commentaire..." : "Entrez l'adresse..."
-              }
-            />
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setTextModalState({ isOpen: false, prospectId: 0, field: "commentaire", currentValue: "" })
-                }
-              >
-                Annuler
-              </Button>
-              <Button onClick={saveTextFromModal}>Enregistrer</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-      {/* Table */}
-      <div className="border rounded-lg bg-white shadow-sm overflow-x-auto transition-all duration-300">
-        {" "}
-        {/* Added transition */}
-        <div className="min-w-max">
-          <table className="w-full text-sm">
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
             <thead className="bg-black text-white">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold min-w-[120px]">DATE</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[120px]">RAPPEL LE</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[180px]">HEURE</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[160px]">PRODUIT</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[140px]">AGENT</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[100px]">ZONE</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[100px]">PROFIL</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[120px]">Nom</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[120px]">Prenom</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[200px]">Adresse</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[100px]">Code postal</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[140px]">Ville</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[130px]">Mobile</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[250px]">Commentaire</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[140px]">CONFIRMATEUR</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[150px]">STATUT</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[180px]">INSTALLATEUR</th>
-                <th className="px-4 py-3 text-left font-semibold min-w-[100px]">Actions</th>
+                <th className="px-4 py-3 text-left min-w-[120px]">DATE</th>
+                <th className="px-4 py-3 text-left min-w-[120px]">RAPPEL LE</th>
+                <th className="px-4 py-3 text-left min-w-[180px]">HEURE</th>
+                <th className="px-4 py-3 text-left min-w-[180px]">PRODUIT</th>
+                <th className="px-4 py-3 text-left min-w-[150px]">AGENT</th>
+                <th className="px-4 py-3 text-left min-w-[100px]">ZONE</th>
+                <th className="px-4 py-3 text-left min-w-[120px]">PROFIL</th>
+                <th className="px-4 py-3 text-left min-w-[150px]">Nom</th>
+                <th className="px-4 py-3 text-left min-w-[150px]">Prenom</th>
+                <th className="px-4 py-3 text-left min-w-[200px]">Adresse</th>
+                <th className="px-4 py-3 text-left min-w-[120px]">Code postal</th>
+                <th className="px-4 py-3 text-left min-w-[150px]">Ville</th>
+                <th className="px-4 py-3 text-left min-w-[140px]">Numéro de mobile</th>
+                <th className="px-4 py-3 text-left min-w-[200px]">Commentaire</th>
+                <th className="px-4 py-3 text-left min-w-[150px]">CONFIRMATEUR</th>
+                <th className="px-4 py-3 text-left min-w-[180px]">STATUT</th>
+                <th className="px-4 py-3 text-left min-w-[180px]">INSTALLATEUR</th>
+                <th className="px-4 py-3 text-left min-w-[100px]">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody>
               {paginatedProspects.map((prospect) => (
-                <tr key={prospect.id} className="hover:bg-gray-50">
+                <tr key={prospect.id} className="border-b hover:bg-gray-50">
                   <td className="px-4 py-2 min-w-[120px]">
-                    <button
-                      onClick={() => openDatePicker(prospect.id, "date", prospect.date)}
-                      className="flex items-center gap-2 px-2 py-1 hover:bg-gray-100 rounded w-full text-left"
-                    >
-                      <Calendar className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm">{prospect.date}</span>
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={prospect.date}
+                        onChange={(e) => handleFieldChange(prospect.id, "date", e.target.value)}
+                        className="w-full px-2 py-1 border rounded text-sm"
+                      />
+                      <button
+                        onClick={() => openDateModal(prospect.id, "date", prospect.date)}
+                        className="p-1 hover:bg-gray-200 rounded"
+                      >
+                        <CalendarIcon className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                   <td className="px-4 py-2 min-w-[120px]">
-                    <button
-                      onClick={() => openDatePicker(prospect.id, "rappelLe", prospect.rappelLe)}
-                      className="flex items-center gap-2 px-2 py-1 hover:bg-gray-100 rounded w-full text-left"
-                    >
-                      <Calendar className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm">{prospect.rappelLe}</span>
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={prospect.rappelLe}
+                        onChange={(e) => handleFieldChange(prospect.id, "rappelLe", e.target.value)}
+                        className="w-full px-2 py-1 border rounded text-sm"
+                      />
+                      <button
+                        onClick={() => openDateModal(prospect.id, "rappelLe", prospect.rappelLe)}
+                        className="p-1 hover:bg-gray-200 rounded"
+                      >
+                        <CalendarIcon className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                   <td className="px-4 py-2 min-w-[180px]">
-                    <Input
-                      type="text"
+                    <textarea
                       value={prospect.heure}
                       onChange={(e) => handleFieldChange(prospect.id, "heure", e.target.value)}
-                      placeholder="Ex: 17h00 sinon envoie SMS"
-                      className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:border-blue-400 focus:outline-none"
+                      className="w-full px-2 py-1 border rounded text-sm resize-none"
+                      rows={1}
                     />
                   </td>
-                  <td className="px-4 py-2 min-w-[160px]">
+                  <td className="px-4 py-2 min-w-[180px]">
                     <select
                       value={prospect.produit}
                       onChange={(e) => handleFieldChange(prospect.id, "produit", e.target.value)}
-                      className={`w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer border-0 focus:outline-none focus:ring-2 focus:ring-blue-400 ${getProduitColor(prospect.produit)}`}
+                      className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("produit", prospect.produit)}`}
                     >
-                      {PRODUITS.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
+                      {produits.map((prod) => (
+                        <option key={prod} value={prod}>
+                          {prod}
                         </option>
                       ))}
                     </select>
                   </td>
-                  <td className="px-4 py-2 min-w-[140px]">
+                  <td className="px-4 py-2 min-w-[150px]">
                     <select
                       value={prospect.agent}
                       onChange={(e) => handleFieldChange(prospect.id, "agent", e.target.value)}
-                      className={`w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer border-0 focus:outline-none focus:ring-2 focus:ring-blue-400 ${getAgentColor(prospect.agent)}`}
+                      className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("agent", prospect.agent)}`}
                     >
-                      {AGENTS.map((a) => (
-                        <option key={a} value={a}>
-                          {a}
+                      {agents.map((agent) => (
+                        <option key={agent} value={agent}>
+                          {agent}
                         </option>
                       ))}
                     </select>
@@ -1191,108 +759,106 @@ export default function ProspectsPage() {
                     <select
                       value={prospect.zone}
                       onChange={(e) => handleFieldChange(prospect.id, "zone", e.target.value)}
-                      className={`w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer border-0 focus:outline-none focus:ring-2 focus:ring-blue-400 ${getZoneColor(prospect.zone)}`}
+                      className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("zone", prospect.zone)}`}
                     >
-                      {ZONES.map((z) => (
-                        <option key={z} value={z}>
-                          {z}
+                      {ZONES.map((zone) => (
+                        <option key={zone} value={zone}>
+                          {zone}
                         </option>
                       ))}
                     </select>
                   </td>
-                  <td className="px-4 py-2 min-w-[100px]">
+                  <td className="px-4 py-2 min-w-[120px]">
                     <select
                       value={prospect.profil}
                       onChange={(e) => handleFieldChange(prospect.id, "profil", e.target.value)}
-                      className={`w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer border-0 focus:outline-none focus:ring-2 focus:ring-blue-400 ${getProfilColor(prospect.profil)}`}
+                      className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("profil", prospect.profil)}`}
                     >
-                      {PROFILS.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-2 min-w-[120px]">
-                    <Input
-                      type="text"
-                      value={prospect.nom}
-                      onChange={(e) => handleFieldChange(prospect.id, "nom", e.target.value)}
-                      className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:border-blue-400 focus:outline-none"
-                    />
-                  </td>
-                  <td className="px-4 py-2 min-w-[120px]">
-                    <Input
-                      type="text"
-                      value={prospect.prenom}
-                      onChange={(e) => handleFieldChange(prospect.id, "prenom", e.target.value)}
-                      className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:border-blue-400 focus:outline-none"
-                    />
-                  </td>
-                  <td className="px-4 py-2 min-w-[200px]">
-                    <button
-                      onClick={() => openTextModal(prospect.id, "adresse", prospect.adresse)}
-                      className="w-full px-2 py-1 text-left text-sm hover:bg-gray-100 rounded truncate"
-                      title={prospect.adresse}
-                    >
-                      {prospect.adresse || "Cliquez pour éditer"}
-                    </button>
-                  </td>
-                  <td className="px-4 py-2 min-w-[100px]">
-                    <Input
-                      type="text"
-                      value={prospect.codePostal}
-                      onChange={(e) => handleFieldChange(prospect.id, "codePostal", e.target.value)}
-                      className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:border-blue-400 focus:outline-none"
-                    />
-                  </td>
-                  <td className="px-4 py-2 min-w-[140px]">
-                    <Input
-                      type="text"
-                      value={prospect.ville}
-                      onChange={(e) => handleFieldChange(prospect.id, "ville", e.target.value)}
-                      className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:border-blue-400 focus:outline-none"
-                    />
-                  </td>
-                  <td className="px-4 py-2 min-w-[130px]">
-                    <Input
-                      type="text"
-                      value={prospect.numeroMobile}
-                      onChange={(e) => handleFieldChange(prospect.id, "numeroMobile", e.target.value)}
-                      className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:border-blue-400 focus:outline-none"
-                    />
-                  </td>
-                  <td className="px-4 py-2 min-w-[250px]">
-                    <button
-                      onClick={() => openTextModal(prospect.id, "commentaire", prospect.commentaire)}
-                      className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 rounded truncate"
-                      title={prospect.commentaire}
-                    >
-                      {prospect.commentaire || "Cliquez pour éditer"}
-                    </button>
-                  </td>
-                  <td className="px-4 py-2 min-w-[140px]">
-                    <select
-                      value={prospect.confirmateur}
-                      onChange={(e) => handleFieldChange(prospect.id, "confirmateur", e.target.value)}
-                      className="w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    >
-                      {CONFIRMATEURS.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
+                      {PROFILS.map((profil) => (
+                        <option key={profil} value={profil}>
+                          {profil}
                         </option>
                       ))}
                     </select>
                   </td>
                   <td className="px-4 py-2 min-w-[150px]">
+                    <input
+                      type="text"
+                      value={prospect.nom}
+                      onChange={(e) => handleFieldChange(prospect.id, "nom", e.target.value)}
+                      className="w-full px-2 py-1 border rounded text-sm"
+                    />
+                  </td>
+                  <td className="px-4 py-2 min-w-[150px]">
+                    <input
+                      type="text"
+                      value={prospect.prenom}
+                      onChange={(e) => handleFieldChange(prospect.id, "prenom", e.target.value)}
+                      className="w-full px-2 py-1 border rounded text-sm"
+                    />
+                  </td>
+                  <td className="px-4 py-2 min-w-[200px]">
+                    <button
+                      onClick={() => openTextModal(prospect.id, "adresse", prospect.adresse)}
+                      className="w-full px-2 py-1 border rounded text-sm text-left hover:bg-gray-100 truncate"
+                    >
+                      {prospect.adresse || "Cliquez pour ajouter"}
+                    </button>
+                  </td>
+                  <td className="px-4 py-2 min-w-[120px]">
+                    <input
+                      type="text"
+                      value={prospect.codePostal}
+                      onChange={(e) => handleFieldChange(prospect.id, "codePostal", e.target.value)}
+                      className="w-full px-2 py-1 border rounded text-sm"
+                    />
+                  </td>
+                  <td className="px-4 py-2 min-w-[150px]">
+                    <input
+                      type="text"
+                      value={prospect.ville}
+                      onChange={(e) => handleFieldChange(prospect.id, "ville", e.target.value)}
+                      className="w-full px-2 py-1 border rounded text-sm"
+                    />
+                  </td>
+                  <td className="px-4 py-2 min-w-[140px]">
+                    <input
+                      type="text"
+                      value={prospect.mobile}
+                      onChange={(e) => handleFieldChange(prospect.id, "mobile", e.target.value)}
+                      className="w-full px-2 py-1 border rounded text-sm"
+                    />
+                  </td>
+                  <td className="px-4 py-2 min-w-[200px]">
+                    <button
+                      onClick={() => openTextModal(prospect.id, "commentaire", prospect.commentaire)}
+                      className="w-full px-2 py-1 border rounded text-sm text-left hover:bg-gray-100 truncate"
+                    >
+                      {prospect.commentaire || "Cliquez pour ajouter"}
+                    </button>
+                  </td>
+                  <td className="px-4 py-2 min-w-[150px]">
+                    <select
+                      value={prospect.confirmateur}
+                      onChange={(e) => handleFieldChange(prospect.id, "confirmateur", e.target.value)}
+                      className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("confirmateur", prospect.confirmateur)}`}
+                    >
+                      {CONFIRMATEURS.map((conf) => (
+                        <option key={conf} value={conf}>
+                          {conf}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-4 py-2 min-w-[180px]">
                     <select
                       value={prospect.statut}
                       onChange={(e) => handleFieldChange(prospect.id, "statut", e.target.value)}
-                      className={`w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer border-0 focus:outline-none focus:ring-2 focus:ring-blue-400 ${getStatutColor(prospect.statut)}`}
+                      className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("statut", prospect.statut)}`}
                     >
-                      {STATUTS.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
+                      {STATUTS.map((stat) => (
+                        <option key={stat} value={stat}>
+                          {stat}
                         </option>
                       ))}
                     </select>
@@ -1301,65 +867,343 @@ export default function ProspectsPage() {
                     <select
                       value={prospect.installateur}
                       onChange={(e) => handleFieldChange(prospect.id, "installateur", e.target.value)}
-                      className="w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("installateur", prospect.installateur)}`}
                     >
-                      {INSTALLATEURS.map((i) => (
-                        <option key={i} value={i}>
-                          {i}
+                      {installateurs.map((inst) => (
+                        <option key={inst} value={inst}>
+                          {inst}
                         </option>
                       ))}
                     </select>
                   </td>
                   <td className="px-4 py-2 min-w-[100px]">
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleEditProspect(prospect)}
-                        className="p-1 hover:bg-blue-100 rounded text-blue-600 transition-colors"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        onClick={() => handleDeleteProspect(prospect.id)}
-                        className="p-1 hover:bg-red-100 rounded text-red-600 transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteProspect(prospect.id)}>
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                    </Button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
-      <div className="bg-white p-4 rounded-lg border border-gray-200 flex items-center justify-between">
-        <div className="text-sm text-gray-700">
-          Affichage de {startIndex + 1} à {Math.min(endIndex, filteredProspects.length)} sur {filteredProspects.length}{" "}
-          prospects
-        </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            variant="outline"
-            size="sm"
-          >
-            Précédent
-          </Button>
-          <span className="text-sm text-gray-700">
-            Page {currentPage} sur {totalPages || 1}
-          </span>
-          <Button
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages || totalPages === 0}
-            variant="outline"
-            size="sm"
-          >
-            Suivant
-          </Button>
+        <div className="p-4 flex justify-between items-center border-t">
+          <div className="text-sm text-gray-600">
+            Affichage de {startIndex + 1} à {Math.min(startIndex + itemsPerPage, filteredProspects.length)} sur{" "}
+            {filteredProspects.length} prospects
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(currentPage - 1)}
+            >
+              Précédent
+            </Button>
+            <span className="text-sm">
+              Page {currentPage} sur {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(currentPage + 1)}
+            >
+              Suivant
+            </Button>
+          </div>
         </div>
       </div>
+
+      {showForm && ( // Control the form visibility with showForm state
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-2xl font-bold mb-4">Nouveau prospect</h2>
+            <form onSubmit={handleAddProspect}>
+              {" "}
+              {/* Use form and onSubmit */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">DATE *</label>
+                  <input
+                    type="date" // Use type="date" for native date picker
+                    value={formatDateForInput(newProspect.date)}
+                    onChange={(e) => setNewProspect({ ...newProspect, date: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">RAPPEL LE *</label>
+                  <input
+                    type="date" // Use type="date" for native date picker
+                    value={formatDateForInput(newProspect.rappelLe)}
+                    onChange={(e) => setNewProspect({ ...newProspect, rappelLe: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">HEURE *</label>
+                  <input
+                    type="text"
+                    value={newProspect.heure}
+                    onChange={(e) => setNewProspect({ ...newProspect, heure: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    placeholder="Ex: 15:30 ou 17h00 sinon SMS"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">PRODUIT *</label>
+                  <select
+                    value={newProspect.produit}
+                    onChange={(e) => setNewProspect({ ...newProspect, produit: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  >
+                    <option value="">Sélectionnez un produit</option> {/* Add default option */}
+                    {produits.map((prod) => (
+                      <option key={prod} value={prod}>
+                        {prod}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">AGENT *</label>
+                  <select
+                    value={newProspect.agent}
+                    onChange={(e) => setNewProspect({ ...newProspect, agent: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  >
+                    <option value="">Sélectionnez un agent</option> {/* Add default option */}
+                    {agents.map((agent) => (
+                      <option key={agent} value={agent}>
+                        {agent}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">ZONE *</label>
+                  <select
+                    value={newProspect.zone}
+                    onChange={(e) => setNewProspect({ ...newProspect, zone: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  >
+                    <option value="">Sélectionnez une zone</option> {/* Add default option */}
+                    {ZONES.map((zone) => (
+                      <option key={zone} value={zone}>
+                        {zone}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">PROFIL *</label>
+                  <select
+                    value={newProspect.profil}
+                    onChange={(e) => setNewProspect({ ...newProspect, profil: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  >
+                    <option value="">Sélectionnez un profil</option> {/* Add default option */}
+                    {PROFILS.map((profil) => (
+                      <option key={profil} value={profil}>
+                        {profil}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Nom *</label>
+                  <input
+                    type="text"
+                    value={newProspect.nom}
+                    onChange={(e) => setNewProspect({ ...newProspect, nom: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Prénom *</label>
+                  <input
+                    type="text"
+                    value={newProspect.prenom}
+                    onChange={(e) => setNewProspect({ ...newProspect, prenom: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium mb-1">Adresse *</label>
+                  <input
+                    type="text"
+                    value={newProspect.adresse}
+                    onChange={(e) => setNewProspect({ ...newProspect, adresse: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Code postal *</label>
+                  <input
+                    type="text"
+                    value={newProspect.codePostal}
+                    onChange={(e) => setNewProspect({ ...newProspect, codePostal: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Ville *</label>
+                  <input
+                    type="text"
+                    value={newProspect.ville}
+                    onChange={(e) => setNewProspect({ ...newProspect, ville: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Numéro de mobile *</label>
+                  <input
+                    type="tel"
+                    value={newProspect.mobile}
+                    onChange={(e) => setNewProspect({ ...newProspect, mobile: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  />
+                </div>
+
+                <div className="md:col-span-3">
+                  <label className="block text-sm font-medium mb-1">Commentaire</label>
+                  <textarea
+                    value={newProspect.commentaire}
+                    onChange={(e) => setNewProspect({ ...newProspect, commentaire: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    rows={3}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">CONFIRMATEUR *</label>
+                  <select
+                    value={newProspect.confirmateur}
+                    onChange={(e) => setNewProspect({ ...newProspect, confirmateur: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  >
+                    <option value="">Sélectionnez un confirmateur</option> {/* Add default option */}
+                    {CONFIRMATEURS.map((conf) => (
+                      <option key={conf} value={conf}>
+                        {conf}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">STATUT *</label>
+                  <select
+                    value={newProspect.statut}
+                    onChange={(e) => setNewProspect({ ...newProspect, statut: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  >
+                    <option value="">Sélectionnez un statut</option> {/* Add default option */}
+                    {STATUTS.map((stat) => (
+                      <option key={stat} value={stat}>
+                        {stat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">INSTALLATEUR *</label>
+                  <select
+                    value={newProspect.installateur}
+                    onChange={(e) => setNewProspect({ ...newProspect, installateur: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  >
+                    <option value="">Sélectionnez un installateur</option> {/* Add default option */}
+                    {installateurs.map((inst) => (
+                      <option key={inst} value={inst}>
+                        {inst}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-6">
+                <Button variant="outline" onClick={() => setShowForm(false)}>
+                  {" "}
+                  {/* Close form on cancel */}
+                  Annuler
+                </Button>
+                <Button type="submit">Ajouter</Button> {/* Changed to type="submit" */}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showDateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-auto">
+            <h3 className="text-lg font-semibold mb-4">Sélectionner une date</h3>
+            <CalendarPicker currentDate={tempDate} onSelectDate={setTempDate} />
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setShowDateModal(false)} className="px-4 py-2 border rounded hover:bg-gray-100">
+                Annuler
+              </button>
+              <button onClick={saveDateChange} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTextModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+            <h3 className="text-lg font-semibold mb-4 capitalize">{textModalField}</h3>
+            <textarea
+              value={tempText}
+              onChange={(e) => setTempText(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md"
+              rows={8}
+              placeholder={`Entrez ${textModalField}...`}
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setShowTextModal(false)} className="px-4 py-2 border rounded hover:bg-gray-100">
+                Annuler
+              </button>
+              <button onClick={saveTextChange} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

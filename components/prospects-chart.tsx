@@ -1,25 +1,16 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
+import { prospectsService } from "@/lib/prospects-data"
 
-const prospectsData = [
-  { name: "ANNULATION PAC", value: 15, color: "#ef4444" },
-  { name: "INJOIGNABLE", value: 8, color: "#8b5cf6" },
-  { name: "RAPPEL PV", value: 12, color: "#3b82f6" },
-  { name: "FACTURER PAC", value: 6, color: "#6b7280" },
-  { name: "RAPPEL PAC", value: 18, color: "#ec4899" },
-  { name: "RAPPEL VACINE", value: 25, color: "#10b981" },
-  { name: "ANNULATION PV", value: 10, color: "#f59e0b" },
-  { name: "NRP", value: 4, color: "#84cc16" },
-  { name: "EN ATTENTE DE DOC", value: 7, color: "#06b6d4" },
-  { name: "FACTURE PV", value: 9, color: "#f97316" },
-  { name: "NOUVEAU", value: 14, color: "#a855f7" },
-  { name: "VALIDATION PAC", value: 11, color: "#22c55e" },
-  { name: "VALIDE PV", value: 13, color: "#eab308" },
-  { name: "Prospects perdus", value: 8, color: "#dc2626" },
-]
+const STATUS_COLORS: Record<string, string> = {
+  VALIDE: "#10b981",
+  ANNULATION: "#ef4444",
+  "RAPPEL YACINE": "#3b82f6",
+  NRP: "#f59e0b",
+}
 
-const RADIAN = Math.PI / 180
 const renderCustomizedLabel = ({
   cx,
   cy,
@@ -35,6 +26,7 @@ const renderCustomizedLabel = ({
   outerRadius: number
   percent: number
 }) => {
+  const RADIAN = Math.PI / 180
   const radius = innerRadius + (outerRadius - innerRadius) * 0.5
   const x = cx + radius * Math.cos(-midAngle * RADIAN)
   const y = cy + radius * Math.sin(-midAngle * RADIAN)
@@ -65,9 +57,7 @@ const CustomTooltip = ({ active, payload }: any) => {
         <p className="text-primary font-medium">
           Valeur: <span className="font-bold">{data.value}</span>
         </p>
-        <p className="text-muted-foreground text-sm">
-          {((data.value / prospectsData.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(1)}% du total
-        </p>
+        <p className="text-muted-foreground text-sm">{((data.value / payload[0].total) * 100).toFixed(1)}% du total</p>
       </div>
     )
   }
@@ -96,7 +86,27 @@ const CustomLegend = ({ payload }: any) => {
 }
 
 export function ProspectsChart() {
-  const total = prospectsData.reduce((sum, item) => sum + item.value, 0)
+  const [prospectsData, setProspectsData] = useState<Array<{ name: string; value: number; color: string }>>([])
+  const [total, setTotal] = useState(0)
+
+  useEffect(() => {
+    const loadData = () => {
+      const counts = prospectsService.getStatutCounts()
+      const data = Object.entries(counts).map(([statut, count]) => ({
+        name: statut,
+        value: count,
+        color: STATUS_COLORS[statut] || "#6b7280",
+      }))
+      setProspectsData(data)
+      setTotal(data.reduce((sum, item) => sum + item.value, 0))
+    }
+
+    loadData()
+
+    const handleProspectsChange = () => loadData()
+    window.addEventListener("prospectsChanged", handleProspectsChange)
+    return () => window.removeEventListener("prospectsChanged", handleProspectsChange)
+  }, [])
 
   return (
     <div className="w-full">

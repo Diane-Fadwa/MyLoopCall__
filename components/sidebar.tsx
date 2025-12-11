@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -34,6 +34,9 @@ import {
   Navigation,
   Wrench,
   X,
+  Package,
+  UserCheck,
+  Hammer,
 } from "lucide-react"
 
 const navigation = [
@@ -56,6 +59,16 @@ const navigation = [
     href: "/parametres",
     icon: FileText,
     children: [
+      {
+        name: "Administration",
+        href: "/parametres/administration",
+        icon: Shield,
+        children: [
+          { name: "Produits", href: "/parametres/administration/produits", icon: Package },
+          { name: "Agents", href: "/parametres/administration/agents", icon: UserCheck },
+          { name: "Installateurs", href: "/parametres/administration/installateurs", icon: Hammer },
+        ],
+      },
       { name: "Collaborateurs", href: "/parametres/collaborateurs", icon: Users },
       { name: "Clients", href: "/parametres/clients", icon: Users },
       { name: "Support", href: "/parametres/support", icon: Settings },
@@ -76,7 +89,7 @@ const navigation = [
 ]
 
 function SidebarContent({ collapsed, setCollapsed }: { collapsed: boolean; setCollapsed: (value: boolean) => void }) {
-  const [expandedItems, setExpandedItems] = useState<string[]>(["Paramètres"]) // Initialize with "Paramètres" expanded by default
+  const [expandedItems, setExpandedItems] = useState<string[]>(["Paramètres", "Administration"])
   const pathname = usePathname()
   const { user } = useAuth()
 
@@ -91,11 +104,7 @@ function SidebarContent({ collapsed, setCollapsed }: { collapsed: boolean; setCo
     return pathname.startsWith(href)
   }
 
-  useEffect(() => {
-    if (pathname.startsWith("/parametres") && !expandedItems.includes("Paramètres")) {
-      setExpandedItems((prev) => [...prev, "Paramètres"])
-    }
-  }, [pathname, expandedItems])
+  // This was forcing items to stay expanded when navigating
 
   return (
     <div className={cn("flex flex-col h-full bg-sidebar border-r border-sidebar-border", collapsed ? "w-16" : "w-64")}>
@@ -169,22 +178,71 @@ function SidebarContent({ collapsed, setCollapsed }: { collapsed: boolean; setCo
                   {item.children.map((child) => {
                     const ChildIcon = child.icon
                     const isChildCurrent = isCurrentPath(child.href)
+                    const childHasChildren = child.children && child.children.length > 0
+                    const isChildExpanded = expandedItems.includes(child.name)
+
                     return (
-                      <Link key={child.name} href={child.href} className="block">
-                        <Button
-                          variant={isChildCurrent ? "default" : "ghost"}
-                          size="sm"
-                          className={cn(
-                            "w-full justify-start text-left text-sm",
-                            isChildCurrent
-                              ? "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
-                              : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                          )}
-                        >
-                          <ChildIcon className="h-3 w-3 mr-2" />
-                          <span>{child.name}</span>
-                        </Button>
-                      </Link>
+                      <div key={child.name}>
+                        {childHasChildren ? (
+                          <Button
+                            variant={isChildCurrent ? "default" : "ghost"}
+                            size="sm"
+                            className={cn(
+                              "w-full justify-start text-left text-sm",
+                              isChildCurrent
+                                ? "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
+                                : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                            )}
+                            onClick={() => toggleExpanded(child.name)}
+                          >
+                            <ChildIcon className="h-3 w-3 mr-2" />
+                            <span className="flex-1">{child.name}</span>
+                            {isChildExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                          </Button>
+                        ) : (
+                          <Link href={child.href} className="block">
+                            <Button
+                              variant={isChildCurrent ? "default" : "ghost"}
+                              size="sm"
+                              className={cn(
+                                "w-full justify-start text-left text-sm",
+                                isChildCurrent
+                                  ? "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
+                                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                              )}
+                            >
+                              <ChildIcon className="h-3 w-3 mr-2" />
+                              <span>{child.name}</span>
+                            </Button>
+                          </Link>
+                        )}
+
+                        {childHasChildren && isChildExpanded && (
+                          <div className="ml-4 mt-1 space-y-1">
+                            {child.children.map((grandchild) => {
+                              const GrandchildIcon = grandchild.icon
+                              const isGrandchildCurrent = isCurrentPath(grandchild.href)
+                              return (
+                                <Link key={grandchild.name} href={grandchild.href} className="block">
+                                  <Button
+                                    variant={isGrandchildCurrent ? "default" : "ghost"}
+                                    size="sm"
+                                    className={cn(
+                                      "w-full justify-start text-left text-xs",
+                                      isGrandchildCurrent
+                                        ? "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
+                                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                                    )}
+                                  >
+                                    <GrandchildIcon className="h-3 w-3 mr-2" />
+                                    <span>{grandchild.name}</span>
+                                  </Button>
+                                </Link>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
                     )
                   })}
                 </div>
