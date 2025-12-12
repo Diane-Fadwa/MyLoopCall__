@@ -1,13 +1,21 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Download, FileSpreadsheet, FileText, Plus, Search, Trash2, CalendarIcon } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/contexts/sidebar-context"
-import { getAgents } from "@/lib/admin-data"
-import { prospectsService, type Prospect } from "@/lib/prospects-data"
+// </CHANGE> Removed local imports and added API imports
+// import { getAgents } from "@/lib/admin-data"
+// import { prospectsService, type Prospect } from "@/lib/prospects-data"
+import {
+  createProspect,
+  updateProspect,
+  deleteProspect,
+  getAllProspectsPaginated, // New API function
+  type ProspectDTO,
+} from "@/lib/api/prospects-api"
+import { getAllProduits } from "@/lib/api/produits-api"
+import { getAllAgents } from "@/lib/api/agents-api"
+import { getAllInstallateurs } from "@/lib/api/installateurs-api"
 
 // Use dynamic data for ZONES and PROFILs, and load products/installers from localStorage
 const CONFIRMATEURS = ["YACINE", "SAFA", "LEILA"]
@@ -19,7 +27,16 @@ const PROFILS = ["BLEU", "JAUNE", "VIOLET", "ROSE"] // Example definition, adjus
 export default function ProspectsPage() {
   const { collapsed } = useSidebar()
 
-  const [prospects, setProspects] = useState<Prospect[]>([])
+  const [prospects, setProspects] = useState<ProspectDTO[]>([])
+  const [totalElements, setTotalElements] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [currentPage, setCurrentPage] = useState(0) // API uses 0-based pages
+  const [itemsPerPage, setItemsPerPage] = useState(50)
+  const [sortBy, setSortBy] = useState("id")
+  const [sortDir, setSortDir] = useState<"ASC" | "DESC">("DESC")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
   const [produits, setProduits] = useState<string[]>([])
   const [agents, setAgents] = useState<string[]>([])
   const [installateurs, setInstallateurs] = useState<string[]>([])
@@ -29,10 +46,8 @@ export default function ProspectsPage() {
   const [filterConfirmateur, setFilterConfirmateur] = useState("")
   const [filterStatut, setFilterStatut] = useState("")
   const [filterProduit, setFilterProduit] = useState("")
-  const [itemsPerPage, setItemsPerPage] = useState(50)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [showModal, setShowModal] = useState(false)
-  const [editingProspect, setEditingProspect] = useState<Prospect | null>(null) // Not currently used but kept for potential future use
+  // Removed itemsPerPage and currentPage from here as they are managed above
+  const [editingProspect, setEditingProspect] = useState<ProspectDTO | null>(null) // Not currently used but kept for potential future use
   const [showDateModal, setShowDateModal] = useState(false)
   const [dateModalField, setDateModalField] = useState<"date" | "rappelLe">("date")
   const [editingProspectId, setEditingProspectId] = useState<number | null>(null)
@@ -41,7 +56,20 @@ export default function ProspectsPage() {
   const [textModalField, setTextModalField] = useState<"adresse" | "commentaire">("adresse")
   const [tempText, setTempText] = useState("")
 
-  const [newProspect, setNewProspect] = useState<Omit<Prospect, "id">>({
+  const [newProspect, setNewProspect] = useState<
+    Omit<
+      ProspectDTO,
+      "id" | "produit" | "agent" | "installateur" | "numeroMobile" | "codePostal" | "heure" | "commentaires"
+    > & {
+      produit: string
+      agent: string
+      installateur: string
+      numeroMobile?: string // Use string for input, convert later
+      codePostal?: string // Use string for input, convert later
+      heure: string // Keep as string for input
+      commentaire: string // Keep as string for input
+    }
+  >({
     date: "",
     rappelLe: "",
     heure: "",
@@ -62,71 +90,132 @@ export default function ProspectsPage() {
   })
   const [showForm, setShowForm] = useState(false) // State to control the visibility of the new prospect form
 
-  // Load initial data and set up listeners
+  const fetchProspects = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      console.log("[v0] === Starting fetchProspects ===")
+      console.log("[v0] Current page:", currentPage)
+      console.log("[v0] Items per page:", itemsPerPage)
+      console.log("[v0] Auth token exists:", !!localStorage.getItem("authToken"))
+
+      const data = await getAllProspectsPaginated(currentPage, itemsPerPage, "id", "DESC")
+
+      console.log("[v0] Data received:", data)
+
+      if (data && data.content && Array.isArray(data.content)) {
+        const transformedProspects = data.content.map((p: any) => ({
+          id: p.id || 0,
+          date: p.date || "",
+          rappelLe: p.rappelLe || "",
+          heure: p.heure || "",
+          produit: p.produit?.nom || "",
+          agent: p.agent?.nom || "",
+          zone: p.zone || "",
+          profil: p.profil || "",
+          nom: p.nom || "",
+          prenom: p.prenom || "",
+          adresse: p.adresse || "",
+          codePostal: p.codePostal?.toString() || "",
+          ville: p.ville || "",
+          mobile: p.numeroMobile?.toString() || "",
+          commentaire: p.commentaire || "",
+          confirmateur: p.confirmateur || "",
+          statut: p.statut || "",
+          installateur: p.installateur?.nom || "",
+        }))
+
+        setProspects(transformedProspects)
+        setTotalElements(data.totalElements || 0)
+        setTotalPages(data.totalPages || 0)
+        console.log("[v0] Successfully loaded", transformedProspects.length, "prospects")
+      } else {
+        console.warn("[v0] No data or empty content array")
+        setProspects([])
+        setTotalElements(0)
+        setTotalPages(0)
+      }
+    } catch (err) {
+      console.error("[v0] FATAL ERROR in fetchProspects:", err)
+      setError("Impossible de charger les prospects. Vérifiez que le serveur backend est démarré.")
+      setProspects([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    setProspects(prospectsService.getProspects())
+    fetchProspects()
+  }, [currentPage, itemsPerPage]) // Only re-fetch when page or itemsPerPage changes
 
-    const loadAdminData = () => {
-      // Load products and installateurs from localStorage
-      const storedProduits = localStorage.getItem("admin_produits")
-      setProduits(storedProduits ? JSON.parse(storedProduits).map((p: any) => p.nom) : [])
+  const getFilteredProspects = () => {
+    let filtered = prospects
 
-      const loadedAgents = getAgents()
-      setAgents(loadedAgents.filter((a) => a.actif).map((a) => a.nom))
-
-      const storedInstallateurs = localStorage.getItem("admin_installateurs")
-      setInstallateurs(storedInstallateurs ? JSON.parse(storedInstallateurs).map((i: any) => i.nom) : [])
+    if (searchTerm) {
+      // Use searchTerm instead of searchQuery
+      filtered = filtered.filter(
+        (p) =>
+          p.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.mobile?.toString().includes(searchTerm),
+      )
     }
 
-    loadAdminData()
-
-    // Listen for custom event when admin data changes
-    const handleAdminChange = () => {
-      loadAdminData()
+    if (filterAgent && filterAgent !== "") {
+      // Changed "Tous" to "" for comparison as "" is the default value
+      filtered = filtered.filter((p) => p.agent === filterAgent)
     }
-    window.addEventListener("adminDataChanged", handleAdminChange)
 
-    return () => {
-      window.removeEventListener("adminDataChanged", handleAdminChange)
+    if (filterConfirmateur && filterConfirmateur !== "") {
+      // Changed "Tous" to ""
+      filtered = filtered.filter((p) => p.confirmateur === filterConfirmateur)
     }
+
+    if (filterStatut && filterStatut !== "") {
+      // Changed "Tous" to ""
+      filtered = filtered.filter((p) => p.statut === filterStatut)
+    }
+
+    if (filterProduit && filterProduit !== "") {
+      // Changed "Tous" to ""
+      filtered = filtered.filter((p) => p.produit === filterProduit)
+    }
+
+    return filtered
+  }
+
+  const filteredProspects = getFilteredProspects()
+
+  useEffect(() => {
+    const loadDropdownData = async () => {
+      try {
+        const [produitsResponse, agentsResponse, installateursResponse] = await Promise.all([
+          getAllProduits(),
+          getAllAgents(),
+          getAllInstallateurs(),
+        ])
+
+        // Handle paginated responses by extracting the content array
+        const produitsArray = Array.isArray(produitsResponse) ? produitsResponse : produitsResponse?.content || []
+        const agentsArray = Array.isArray(agentsResponse) ? agentsResponse : agentsResponse?.content || []
+        const installateursArray = Array.isArray(installateursResponse)
+          ? installateursResponse
+          : installateursResponse?.content || []
+
+        setProduits(produitsArray.map((p: any) => p.nom))
+        setAgents(agentsArray.map((a: any) => a.nom))
+        setInstallateurs(installateursArray.map((i: any) => i.nom))
+      } catch (err) {
+        console.error("[v0] Error loading dropdown data:", err)
+        setError(err instanceof Error ? err.message : "Erreur lors du chargement des données des listes déroulantes")
+      }
+    }
+
+    loadDropdownData()
   }, [])
 
-  // Dynamically update newProspect defaults when data loads
-  useEffect(() => {
-    setNewProspect((prev) => ({
-      ...prev,
-      produit: produits[0] || prev.produit,
-      agent: agents[0] || prev.agent,
-      installateur: installateurs[0] || prev.installateur,
-      zone: ZONES[0] || prev.zone,
-      profil: PROFILS[0] || prev.profil,
-      confirmateur: CONFIRMATEURS[0] || prev.confirmateur,
-      statut: STATUTS[0] || prev.statut,
-    }))
-  }, [produits, agents, installateurs])
-
-  const filteredProspects = prospects.filter((prospect) => {
-    const matchesSearch =
-      prospect.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      prospect.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      prospect.mobile.includes(searchTerm)
-
-    const matchesAgent = !filterAgent || prospect.agent === filterAgent
-    const matchesConfirmateur = !filterConfirmateur || prospect.confirmateur === filterConfirmateur
-    const matchesStatut = !filterStatut || prospect.statut === filterStatut
-    const matchesProduit = !filterProduit || prospect.produit === filterProduit
-
-    return matchesSearch && matchesAgent && matchesConfirmateur && matchesStatut && matchesProduit
-  })
-
-  const totalPages = Math.ceil(filteredProspects.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const paginatedProspects = filteredProspects.slice(startIndex, startIndex + itemsPerPage)
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [searchTerm, filterAgent, filterConfirmateur, filterStatut, filterProduit, itemsPerPage])
+  // Removed the useEffect that resets currentPage on filter change as filtering is client-side now
 
   const formatDateForInput = (dateStr: string) => {
     if (!dateStr) return ""
@@ -155,60 +244,249 @@ export default function ProspectsPage() {
     return dateStr
   }
 
-  const handleAddProspect = (e: React.FormEvent) => {
-    e.preventDefault()
-    const prospectToAdd: Omit<Prospect, "id"> = {
-      ...newProspect,
-      date: formatDateForDisplay(newProspect.date),
-      rappelLe: formatDateForDisplay(newProspect.rappelLe),
+  const handleAddProspect = async () => {
+    try {
+      // Transform frontend data to API format
+      const prospectToCreate: ProspectDTO = {
+        date: newProspect.date ? new Date(formatDateForInput(newProspect.date)).toISOString() : undefined,
+        rappelLe: newProspect.rappelLe ? new Date(formatDateForInput(newProspect.rappelLe)).toISOString() : undefined,
+        produit: { nom: newProspect.produit },
+        agent: { nom: newProspect.agent },
+        zone: newProspect.zone,
+        profil: newProspect.profil,
+        nom: newProspect.nom,
+        prenom: newProspect.prenom,
+        adresse: newProspect.adresse,
+        codePostal: newProspect.codePostal ? Number.parseInt(newProspect.codePostal) : undefined,
+        ville: newProspect.ville,
+        numeroMobile: newProspect.mobile ? Number.parseInt(newProspect.mobile) : undefined,
+        // Combine heure and commentaire for the API, assuming 'heure' takes precedence if present
+        commentaire: `${newProspect.heure}${newProspect.commentaire ? " - " + newProspect.commentaire : ""}`,
+        confirmateur: newProspect.confirmateur,
+        statut: newProspect.statut,
+        installateur: { nom: newProspect.installateur },
+      }
+
+      await createProspect(prospectToCreate)
+
+      // Refresh prospects list
+      await fetchProspects()
+
+      // Reset form
+      setNewProspect({
+        date: "",
+        rappelLe: "",
+        heure: "",
+        produit: produits[0] || "",
+        agent: agents[0] || "",
+        zone: ZONES[0] || "",
+        profil: PROFILS[0] || "",
+        nom: "",
+        prenom: "",
+        adresse: "",
+        codePostal: "",
+        ville: "",
+        mobile: "",
+        commentaire: "",
+        confirmateur: CONFIRMATEURS[0] || "",
+        statut: STATUTS[0] || "",
+        installateur: installateurs[0] || "",
+      })
+      setShowForm(false)
+    } catch (err) {
+      console.error("[v0] Error adding prospect:", err)
+      setError(err instanceof Error ? err.message : "Erreur lors de l'ajout du prospect")
     }
-    prospectsService.addProspect(prospectToAdd)
-    setProspects(prospectsService.getProspects())
-    setShowForm(false) // Close the form after adding
-    setNewProspect({
-      // Reset the form
-      date: "",
-      rappelLe: "",
-      heure: "",
-      produit: produits[0] || "",
-      agent: agents[0] || "",
-      zone: ZONES[0] || "",
-      profil: PROFILS[0] || "",
-      nom: "",
-      prenom: "",
-      adresse: "",
-      codePostal: "",
-      ville: "",
-      mobile: "",
-      commentaire: "",
-      confirmateur: CONFIRMATEURS[0] || "",
-      statut: STATUTS[0] || "",
-      installateur: installateurs[0] || "",
-    })
   }
 
-  const handleDeleteProspect = (id: number) => {
-    if (confirm("Êtes-vous sûr de vouloir supprimer ce prospect ?")) {
-      prospectsService.deleteProspect(id)
-      setProspects(prospectsService.getProspects())
+  const handleFieldChange = async (
+    id: number,
+    field: keyof ProspectDTO | "heure" | "mobile" | "codePostal",
+    value: string,
+  ) => {
+    try {
+      const prospect = prospects.find((p) => p.id === id)
+      if (!prospect) return
+
+      // Prepare the update payload, transforming frontend types to API expected types
+      const prospectToUpdate: Partial<ProspectDTO> = {
+        id: id,
+      }
+
+      if (field === "date") {
+        prospectToUpdate.date = value ? new Date(formatDateForInput(value)).toISOString() : undefined
+      } else if (field === "rappelLe") {
+        prospectToUpdate.rappelLe = value ? new Date(formatDateForInput(value)).toISOString() : undefined
+      } else if (field === "produit") {
+        prospectToUpdate.produit = { nom: value }
+      } else if (field === "agent") {
+        prospectToUpdate.agent = { nom: value }
+      } else if (field === "installateur") {
+        prospectToUpdate.installateur = { nom: value }
+      } else if (field === "codePostal") {
+        prospectToUpdate.codePostal = value ? Number.parseInt(value) : undefined
+      } else if (field === "mobile") {
+        // Assuming 'mobile' maps to 'numeroMobile'
+        prospectToUpdate.numeroMobile = value ? Number.parseInt(value) : undefined
+      } else if (
+        field === "zone" ||
+        field === "profil" ||
+        field === "nom" ||
+        field === "prenom" ||
+        field === "adresse" ||
+        field === "ville" ||
+        field === "confirmateur" ||
+        field === "statut"
+      ) {
+        // These fields map directly or are already in the correct format
+        ;(prospectToUpdate as any)[field] = value
+      } else if (field === "heure") {
+        // If updating 'heure', we need to update 'commentaire' field in API
+        // Construct the new comment by combining existing comment with updated heure
+        const existingComment = prospect.commentaire || ""
+        const currentHeure = prospects.find((p) => p.id === id)?.heure || ""
+        const heureValue = value
+        let updatedComment = existingComment
+
+        if (heureValue) {
+          if (currentHeure && existingComment.startsWith(currentHeure)) {
+            // Replace existing heure in comment
+            updatedComment = existingComment.replace(currentHeure, heureValue)
+          } else {
+            // Prepend heure if it's new or not at the start
+            updatedComment = `${heureValue} - ${existingComment.replace(/^\s*-\s*/, "")}` // Ensure hyphen and space only if comment exists
+          }
+        } else {
+          // If heure is cleared, remove it from the comment if it exists at the start
+          if (currentHeure && existingComment.startsWith(currentHeure)) {
+            updatedComment = existingComment
+              .replace(currentHeure, "")
+              .replace(/^\s*-\s*/, "")
+              .trim()
+          }
+        }
+        prospectToUpdate.commentaire = updatedComment
+      } else if (field === "commentaire") {
+        // If updating 'commentaire', and 'heure' field exists, we need to ensure 'heure' is preserved
+        const existingHeure = prospects.find((p) => p.id === id)?.heure || ""
+        let updatedComment = value
+
+        if (existingHeure) {
+          // Check if the existing heure is at the start of the value
+          if (value.startsWith(existingHeure)) {
+            // If it is, no change needed for heure's part in comment
+          } else if (value.includes(existingHeure)) {
+            // If heure is somewhere in the middle, we need to ensure it's properly formatted.
+            // This is a complex case and might need refinement based on actual data structure.
+            // For now, assume simple concatenation.
+            updatedComment = `${existingHeure} - ${value.replace(/^\s*-\s*/, "")}`
+          } else {
+            // If heure is not present in the new comment, prepend it
+            updatedComment = `${existingHeure} - ${value.replace(/^\s*-\s*/, "")}`
+          }
+        }
+        prospectToUpdate.commentaire = updatedComment
+      }
+
+      // Ensure that fields that should be objects are correctly structured if they are being updated
+      if (prospectToUpdate.produit && typeof prospectToUpdate.produit !== "object")
+        prospectToUpdate.produit = { nom: prospectToUpdate.produit as any }
+      if (prospectToUpdate.agent && typeof prospectToUpdate.agent !== "object")
+        prospectToUpdate.agent = { nom: prospectToUpdate.agent as any }
+      if (prospectToUpdate.installateur && typeof prospectToUpdate.installateur !== "object")
+        prospectToUpdate.installateur = { nom: prospectToUpdate.installateur as any }
+
+      await updateProspect(id, prospectToUpdate as ProspectDTO) // Cast to ProspectDTO for update call
+
+      // Update local state - this part needs to reflect the actual data structure being displayed
+      // For example, if `heure` is displayed directly but stored in `commentaire` for API,
+      // we need to extract it or update the displayed `heure` in the state.
+      setProspects((prev) =>
+        prev.map((p) => {
+          if (p.id === id) {
+            const updatedP = { ...p }
+
+            // Update specific fields based on input
+            if (field === "date" || field === "rappelLe") {
+              updatedP[field] = value
+            } else if (
+              field === "produit" ||
+              field === "agent" ||
+              field === "zone" ||
+              field === "profil" ||
+              field === "nom" ||
+              field === "prenom" ||
+              field === "adresse" ||
+              field === "ville" ||
+              field === "confirmateur" ||
+              field === "statut"
+            ) {
+              updatedP[field] = value
+            } else if (field === "codePostal" || field === "mobile") {
+              updatedP[field] = value
+            } else if (field === "heure") {
+              updatedP.heure = value // Update displayed heure
+              const existingComment = p.commentaire || ""
+              const currentHeure = p.heure || ""
+              let newComment = existingComment
+              if (value) {
+                if (currentHeure && existingComment.startsWith(currentHeure)) {
+                  newComment = existingComment.replace(currentHeure, value)
+                } else {
+                  newComment = `${value} - ${existingComment.replace(/^\s*-\s*/, "")}`
+                }
+              } else {
+                if (currentHeure && existingComment.startsWith(currentHeure)) {
+                  newComment = existingComment
+                    .replace(currentHeure, "")
+                    .replace(/^\s*-\s*/, "")
+                    .trim()
+                }
+              }
+              updatedP.commentaire = newComment
+            } else if (field === "commentaire") {
+              updatedP.commentaire = value
+              const existingHeure = p.heure || ""
+              let newComment = value
+              if (existingHeure && !value.includes(existingHeure)) {
+                newComment = `${existingHeure} - ${value.replace(/^\s*-\s*/, "")}`
+              }
+              updatedP.commentaire = newComment
+            }
+            return updatedP
+          }
+          return p
+        }),
+      )
+    } catch (err) {
+      console.error("[v0] Error updating prospect:", err)
+      setError(err instanceof Error ? err.message : "Erreur lors de la mise à jour du prospect")
     }
   }
 
-  const handleFieldChange = (id: number, field: keyof Prospect, value: string) => {
-    const updatedProspects = prospects.map((p) => (p.id === id ? { ...p, [field]: value } : p))
-    setProspects(updatedProspects)
-    prospectsService.saveProspects(updatedProspects) // Save to local storage
+  const handleDeleteProspect = async (id: number) => {
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer ce prospect ?")) {
+      try {
+        await deleteProspect(id)
+        await fetchProspects()
+      } catch (err) {
+        console.error("[v0] Error deleting prospect:", err)
+        setError(err instanceof Error ? err.message : "Erreur lors de la suppression du prospect")
+      }
+    }
   }
 
   const openDateModal = (prospectId: number, field: "date" | "rappelLe", currentValue: string) => {
     setEditingProspectId(prospectId)
     setDateModalField(field)
-    setTempDate(currentValue)
+    // Ensure current date is in YYYY-MM-DD format for the input/calendar
+    setTempDate(formatDateForInput(currentValue))
     setShowDateModal(true)
   }
 
   const saveDateChange = () => {
     if (editingProspectId !== null) {
+      // Call handleFieldChange with the appropriate field and the tempDate value
       handleFieldChange(editingProspectId, dateModalField, tempDate)
     }
     setShowDateModal(false)
@@ -258,26 +536,28 @@ export default function ProspectsPage() {
     ]
     const csvContent = [
       headers.join(","),
-      ...filteredProspects.map((p) =>
-        [
-          p.date,
-          p.rappelLe,
-          p.heure,
-          p.produit,
-          p.agent,
-          p.zone,
-          p.profil,
-          p.nom,
-          p.prenom,
-          p.adresse.replace(/,/g, " "),
-          p.codePostal,
-          p.ville,
-          p.mobile,
-          p.commentaire.replace(/,/g, " "),
-          p.confirmateur,
-          p.statut,
-          p.installateur,
-        ].join(","),
+      ...filteredProspects.map(
+        // Use filteredProspects for export
+        (p) =>
+          [
+            p.date,
+            p.rappelLe,
+            p.heure,
+            p.produit,
+            p.agent,
+            p.zone,
+            p.profil,
+            p.nom,
+            p.prenom,
+            p.adresse.replace(/,/g, " "),
+            p.codePostal,
+            p.ville,
+            p.mobile,
+            p.commentaire.replace(/,/g, " "),
+            p.confirmateur,
+            p.statut,
+            p.installateur,
+          ].join(","),
       ),
     ].join("\n")
 
@@ -315,6 +595,8 @@ export default function ProspectsPage() {
     excelContent += "</tr></thead><tbody>"
 
     filteredProspects.forEach((p) => {
+      // Use filteredProspects for export
+      // Use fetched prospects for export
       excelContent += `<tr>
         <td>${p.date}</td>
         <td>${p.rappelLe}</td>
@@ -350,6 +632,7 @@ export default function ProspectsPage() {
     setFilterStatut("")
     setFilterProduit("")
     setSearchTerm("")
+    // Resetting filters no longer needs to reset the page as filtering is client-side
   }
 
   const getColorClass = (field: string, value: string) => {
@@ -414,7 +697,12 @@ export default function ProspectsPage() {
     onSelectDate,
   }: { currentDate: string; onSelectDate: (date: string) => void }) => {
     const [viewDate, setViewDate] = useState(() => {
-      if (currentDate) {
+      // Ensure initial date is in a format the Date object can parse
+      if (currentDate && currentDate.includes("-")) {
+        // Already YYYY-MM-DD
+        return new Date(currentDate)
+      } else if (currentDate && currentDate.includes("/")) {
+        // DD/MM/YYYY
         const parts = currentDate.split("/")
         if (parts.length === 3) {
           return new Date(Number.parseInt(parts[2]), Number.parseInt(parts[1]) - 1, Number.parseInt(parts[0]))
@@ -436,7 +724,8 @@ export default function ProspectsPage() {
     }
 
     const selectDate = (day: number) => {
-      const selected = `${String(day).padStart(2, "0")}/${String(viewDate.getMonth() + 1).padStart(2, "0")}/${viewDate.getFullYear()}`
+      // Format date as YYYY-MM-DD for consistency with input[type=date]
+      const selected = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
       onSelectDate(selected)
     }
 
@@ -483,9 +772,10 @@ export default function ProspectsPage() {
               day === new Date().getDate() &&
               viewDate.getMonth() === new Date().getMonth() &&
               viewDate.getFullYear() === new Date().getFullYear()
-            const isSelected =
-              currentDate ===
-              `${String(day).padStart(2, "0")}/${String(viewDate.getMonth() + 1).padStart(2, "0")}/${viewDate.getFullYear()}`
+
+            // Compare formatted date for selection
+            const formattedCurrentDay = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+            const isSelected = currentDate === formattedCurrentDay
 
             return (
               <button
@@ -504,35 +794,57 @@ export default function ProspectsPage() {
     )
   }
 
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handleItemsPerPageChange = (value: number) => {
+    setItemsPerPage(value)
+    setCurrentPage(0) // Reset to the first page when changing items per page
+  }
+
   return (
-    <div className={`p-6 transition-all duration-300 ${collapsed ? "ml-0" : "ml-0"}`}>
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-6 space-y-6">
+      {" "}
+      {/* Changed margin to space-y for better vertical spacing */}
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Prospects</h1>
-          <p className="text-gray-600">Gérez vos prospects et rendez-vous</p>
+          <p className="text-muted-foreground">Gérez vos prospects et rendez-vous</p>{" "}
+          {/* Changed text-gray-600 to text-muted-foreground for consistency */}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={exportToPDF}>
-            <FileText className="w-4 h-4 mr-2" />
+          <button
+            onClick={exportToPDF}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            <FileText className="w-4 h-4" />
             PDF
-          </Button>
-          <Button variant="outline" onClick={exportToCSV}>
-            <FileSpreadsheet className="w-4 h-4 mr-2" />
+          </button>
+          <button
+            onClick={exportToCSV}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
             CSV
-          </Button>
-          <Button variant="outline" onClick={exportToExcel}>
-            <Download className="w-4 h-4 mr-2" />
+          </button>
+          <button
+            onClick={exportToExcel}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            <Download className="w-4 h-4" />
             Excel
-          </Button>
-          <Button onClick={() => setShowForm(true)}>
-            {" "}
-            {/* Changed to control the form visibility */}
-            <Plus className="w-4 h-4 mr-2" />
+          </button>
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" />
             Nouveau prospect
-          </Button>
+          </button>
         </div>
       </div>
-
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">{error}</div>}
       <div className="bg-white p-4 rounded-lg shadow mb-4">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
           <div>
@@ -614,55 +926,60 @@ export default function ProspectsPage() {
           </div>
         </div>
 
-        <Button variant="outline" size="sm" onClick={resetFilters}>
+        <button onClick={resetFilters} className="px-4 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50">
           Réinitialiser les filtres
-        </Button>
+        </button>
       </div>
-
-      <div className="bg-white rounded-lg shadow mb-4">
-        <div className="p-4 flex justify-between items-center border-b">
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">Afficher par:</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => setItemsPerPage(Number(e.target.value))}
-              className="px-3 py-1 border rounded-md text-sm"
-            >
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-              <option value={200}>200</option>
-              <option value={500}>500</option>
-            </select>
-            <span className="text-sm text-gray-600">
-              Affichage de {startIndex + 1} à {Math.min(startIndex + itemsPerPage, filteredProspects.length)} sur{" "}
-              {filteredProspects.length} prospects
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(currentPage - 1)}
-            >
-              Précédent
-            </Button>
-            <span className="text-sm">
-              Page {currentPage} sur {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage(currentPage + 1)}
-            >
-              Suivant
-            </Button>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Afficher par:</span>{" "}
+          {/* Changed text-gray-600 to text-muted-foreground */}
+          <select
+            value={itemsPerPage}
+            onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+            className="border rounded px-3 py-1 text-sm"
+          >
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={200}>200</option>
+            <option value={500}>500</option>
+          </select>
+          {/* Display count based on filtered results */}
+          <div className="mb-4 text-sm text-muted-foreground">
+            Affichage de {filteredProspects.length} prospects sur {totalElements}
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 0 || loading}
+            className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50"
+          >
+            Précédent
+          </button>
+          <span className="text-sm">
+            Page {currentPage + 1} sur {totalPages}
+          </span>
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages - 1 || loading}
+            className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50"
+          >
+            Suivant
+          </button>
+        </div>
+      </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Chargement des prospects...</p>{" "}
+            {/* Changed text-gray-600 to text-muted-foreground */}
+          </div>
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-x-auto">
           <table className="w-full">
             <thead className="bg-black text-white">
               <tr>
@@ -687,15 +1004,17 @@ export default function ProspectsPage() {
               </tr>
             </thead>
             <tbody>
-              {paginatedProspects.map((prospect) => (
+              {/* Iterate over filteredProspects */}
+              {filteredProspects.map((prospect) => (
                 <tr key={prospect.id} className="border-b hover:bg-gray-50">
                   <td className="px-4 py-2 min-w-[120px]">
                     <div className="flex items-center gap-1">
                       <input
                         type="text"
                         value={prospect.date}
-                        onChange={(e) => handleFieldChange(prospect.id, "date", e.target.value)}
+                        // onChange={(e) => handleFieldChange(prospect.id, "date", e.target.value)} // Direct input for date is tricky with API format, use calendar
                         className="w-full px-2 py-1 border rounded text-sm"
+                        readOnly // Make readOnly to enforce calendar usage
                       />
                       <button
                         onClick={() => openDateModal(prospect.id, "date", prospect.date)}
@@ -710,8 +1029,9 @@ export default function ProspectsPage() {
                       <input
                         type="text"
                         value={prospect.rappelLe}
-                        onChange={(e) => handleFieldChange(prospect.id, "rappelLe", e.target.value)}
+                        // onChange={(e) => handleFieldChange(prospect.id, "rappelLe", e.target.value)} // Direct input for date is tricky with API format, use calendar
                         className="w-full px-2 py-1 border rounded text-sm"
+                        readOnly // Make readOnly to enforce calendar usage
                       />
                       <button
                         onClick={() => openDateModal(prospect.id, "rappelLe", prospect.rappelLe)}
@@ -723,7 +1043,7 @@ export default function ProspectsPage() {
                   </td>
                   <td className="px-4 py-2 min-w-[180px]">
                     <textarea
-                      value={prospect.heure}
+                      value={prospect.heure} // Displaying 'heure' directly
                       onChange={(e) => handleFieldChange(prospect.id, "heure", e.target.value)}
                       className="w-full px-2 py-1 border rounded text-sm resize-none"
                       rows={1}
@@ -735,6 +1055,7 @@ export default function ProspectsPage() {
                       onChange={(e) => handleFieldChange(prospect.id, "produit", e.target.value)}
                       className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("produit", prospect.produit)}`}
                     >
+                      <option value="">Sélectionnez un produit</option>
                       {produits.map((prod) => (
                         <option key={prod} value={prod}>
                           {prod}
@@ -748,6 +1069,7 @@ export default function ProspectsPage() {
                       onChange={(e) => handleFieldChange(prospect.id, "agent", e.target.value)}
                       className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("agent", prospect.agent)}`}
                     >
+                      <option value="">Sélectionnez un agent</option>
                       {agents.map((agent) => (
                         <option key={agent} value={agent}>
                           {agent}
@@ -761,6 +1083,7 @@ export default function ProspectsPage() {
                       onChange={(e) => handleFieldChange(prospect.id, "zone", e.target.value)}
                       className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("zone", prospect.zone)}`}
                     >
+                      <option value="">Sélectionnez une zone</option>
                       {ZONES.map((zone) => (
                         <option key={zone} value={zone}>
                           {zone}
@@ -774,6 +1097,7 @@ export default function ProspectsPage() {
                       onChange={(e) => handleFieldChange(prospect.id, "profil", e.target.value)}
                       className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("profil", prospect.profil)}`}
                     >
+                      <option value="">Sélectionnez un profil</option>
                       {PROFILS.map((profil) => (
                         <option key={profil} value={profil}>
                           {profil}
@@ -843,6 +1167,7 @@ export default function ProspectsPage() {
                       onChange={(e) => handleFieldChange(prospect.id, "confirmateur", e.target.value)}
                       className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("confirmateur", prospect.confirmateur)}`}
                     >
+                      <option value="">Sélectionnez un confirmateur</option>
                       {CONFIRMATEURS.map((conf) => (
                         <option key={conf} value={conf}>
                           {conf}
@@ -856,6 +1181,7 @@ export default function ProspectsPage() {
                       onChange={(e) => handleFieldChange(prospect.id, "statut", e.target.value)}
                       className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("statut", prospect.statut)}`}
                     >
+                      <option value="">Sélectionnez un statut</option>
                       {STATUTS.map((stat) => (
                         <option key={stat} value={stat}>
                           {stat}
@@ -869,6 +1195,7 @@ export default function ProspectsPage() {
                       onChange={(e) => handleFieldChange(prospect.id, "installateur", e.target.value)}
                       className={`w-full px-3 py-2 rounded-md text-sm font-medium ${getColorClass("installateur", prospect.installateur)}`}
                     >
+                      <option value="">Sélectionnez un installateur</option>
                       {installateurs.map((inst) => (
                         <option key={inst} value={inst}>
                           {inst}
@@ -877,51 +1204,66 @@ export default function ProspectsPage() {
                     </select>
                   </td>
                   <td className="px-4 py-2 min-w-[100px]">
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteProspect(prospect.id)}>
+                    <button onClick={() => handleDeleteProspect(prospect.id)} className="p-2 hover:bg-gray-100 rounded">
                       <Trash2 className="w-4 h-4 text-red-600" />
-                    </Button>
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+      {/* Pagination controls moved outside the loading check to always be visible */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Afficher par:</span>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+            className="border rounded px-3 py-1 text-sm"
+          >
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={200}>200</option>
+            <option value={500}>500</option>
+          </select>
+          <span className="text-sm text-muted-foreground">
+            Affichage de {currentPage * itemsPerPage + 1} à {Math.min((currentPage + 1) * itemsPerPage, totalElements)}{" "}
+            sur {totalElements} prospects
+          </span>
+        </div>
 
-        <div className="p-4 flex justify-between items-center border-t">
-          <div className="text-sm text-gray-600">
-            Affichage de {startIndex + 1} à {Math.min(startIndex + itemsPerPage, filteredProspects.length)} sur{" "}
-            {filteredProspects.length} prospects
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(currentPage - 1)}
-            >
-              Précédent
-            </Button>
-            <span className="text-sm">
-              Page {currentPage} sur {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage(currentPage + 1)}
-            >
-              Suivant
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 0 || loading}
+            className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50"
+          >
+            Précédent
+          </button>
+          <span className="text-sm">
+            Page {currentPage + 1} sur {totalPages}
+          </span>
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages - 1 || loading}
+            className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50"
+          >
+            Suivant
+          </button>
         </div>
       </div>
-
       {showForm && ( // Control the form visibility with showForm state
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-4">Nouveau prospect</h2>
-            <form onSubmit={handleAddProspect}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleAddProspect()
+              }}
+            >
               {" "}
               {/* Use form and onSubmit */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1153,18 +1495,21 @@ export default function ProspectsPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 mt-6">
-                <Button variant="outline" onClick={() => setShowForm(false)}>
-                  {" "}
-                  {/* Close form on cancel */}
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
                   Annuler
-                </Button>
-                <Button type="submit">Ajouter</Button> {/* Changed to type="submit" */}
+                </button>
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                  Ajouter
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
       {showDateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-auto">
@@ -1181,7 +1526,6 @@ export default function ProspectsPage() {
           </div>
         </div>
       )}
-
       {showTextModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl">

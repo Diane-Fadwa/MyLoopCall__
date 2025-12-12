@@ -2,30 +2,89 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Plus, Pencil, Trash2, GripVertical } from "lucide-react"
-import { type Agent, getAgents, saveAgents, getRoles } from "@/lib/admin-data"
+import { Plus, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown } from "lucide-react"
+import { getRoles } from "@/lib/admin-data"
+import {
+  type AgentDTO,
+  getAllAgentsPaginated,
+  createAgent,
+  updateAgent,
+  deleteAgent,
+  type PaginatedResponse,
+} from "@/lib/api/agents-api"
 
 export default function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>([])
+  const [agents, setAgents] = useState<AgentDTO[]>([])
   const [roles, setRoles] = useState<string[]>([])
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    setAgents(getAgents())
-    const rolesData = getRoles()
-    setRoles(rolesData.map((r) => r.nom))
-  }, [])
-
-  useEffect(() => {
-    if (agents.length > 0) {
-      saveAgents(agents)
-      window.dispatchEvent(new Event("adminDataChanged"))
-    }
-  }, [agents])
+  const [currentPage, setCurrentPage] = useState(0)
+  const [pageSize, setPageSize] = useState(50)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+  const [sortBy, setSortBy] = useState("nom")
+  const [sortDir, setSortDir] = useState<"ASC" | "DESC">("ASC")
 
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
-  const [formData, setFormData] = useState({ nom: "", email: "", telephone: "", actif: true, role: "Utilisateur" })
+  const [editingAgent, setEditingAgent] = useState<AgentDTO | null>(null)
+  const [formData, setFormData] = useState({
+    nom: "",
+    email: "",
+    telephone: "",
+    actif: true,
+    role: "Utilisateur",
+  })
+
+  const fetchAgents = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      console.log("[v0] Fetching agents from API with pagination...")
+      const data: PaginatedResponse<AgentDTO> = await getAllAgentsPaginated(currentPage, pageSize, sortBy, sortDir)
+      console.log("[v0] Agents data received:", data)
+
+      if (data && data.content) {
+        const savedOrder = localStorage.getItem("agentsOrder")
+        let orderedAgents = data.content
+
+        if (savedOrder) {
+          try {
+            const orderArray: number[] = JSON.parse(savedOrder)
+            // Reorder agents based on saved order
+            orderedAgents = orderArray
+              .map((id) => data.content.find((agent) => agent.id === id))
+              .filter((agent): agent is AgentDTO => agent !== undefined)
+
+            // Add any new agents that aren't in the saved order
+            const newAgents = data.content.filter((agent) => !orderArray.includes(agent.id!))
+            orderedAgents = [...orderedAgents, ...newAgents]
+          } catch (e) {
+            console.error("[v0] Error parsing saved order:", e)
+          }
+        }
+
+        setAgents(orderedAgents)
+        setTotalPages(data.totalPages)
+        setTotalElements(data.totalElements)
+      } else {
+        setAgents([])
+      }
+    } catch (err) {
+      console.error("[v0] Error fetching agents:", err)
+      setError(err instanceof Error ? err.message : "Une erreur est survenue")
+      setAgents([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchAgents()
+    const rolesData = getRoles()
+    setRoles(rolesData.map((r) => r.nom))
+  }, [currentPage, pageSize, sortBy, sortDir])
 
   const handleAdd = () => {
     setEditingAgent(null)
@@ -33,34 +92,53 @@ export default function AgentsPage() {
     setIsModalOpen(true)
   }
 
-  const handleEdit = (agent: Agent) => {
+  const handleEdit = (agent: AgentDTO) => {
     setEditingAgent(agent)
     setFormData({
       nom: agent.nom,
-      email: agent.email,
-      telephone: agent.telephone,
-      actif: agent.actif,
-      role: agent.role,
+      email: agent.email || "",
+      telephone: agent.telephone || "",
+      actif: agent.actif ?? true,
+      role: "Utilisateur", // Note: role not in DTO, using default
     })
     setIsModalOpen(true)
   }
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm("Êtes-vous sûr de vouloir supprimer cet agent ?")) {
-      setAgents(agents.filter((a) => a.id !== id))
+      try {
+        await deleteAgent(id)
+        fetchAgents()
+      } catch (err) {
+        console.error("[v0] Error deleting agent:", err)
+        alert("Erreur lors de la suppression de l'agent")
+      }
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (editingAgent) {
-      setAgents(agents.map((a) => (a.id === editingAgent.id ? { ...a, ...formData } : a)))
-    } else {
-      const newId = Math.max(...agents.map((a) => a.id), 0) + 1
-      setAgents([...agents, { id: newId, ...formData }])
+    try {
+      const agentData: AgentDTO = {
+        nom: formData.nom,
+        email: formData.email,
+        telephone: formData.telephone,
+        actif: formData.actif,
+      }
+
+      if (editingAgent && editingAgent.id) {
+        await updateAgent(editingAgent.id, agentData)
+      } else {
+        await createAgent(agentData)
+      }
+
+      setIsModalOpen(false)
+      setFormData({ nom: "", email: "", telephone: "", actif: true, role: "Utilisateur" })
+      fetchAgents()
+    } catch (err) {
+      console.error("[v0] Error saving agent:", err)
+      alert("Erreur lors de l'enregistrement de l'agent")
     }
-    setIsModalOpen(false)
-    setFormData({ nom: "", email: "", telephone: "", actif: true, role: "Utilisateur" })
   }
 
   const handleDragStart = (index: number) => {
@@ -80,7 +158,50 @@ export default function AgentsPage() {
   }
 
   const handleDragEnd = () => {
+    if (agents.length > 0) {
+      const orderArray = agents.map((agent) => agent.id).filter((id): id is number => id !== undefined)
+      localStorage.setItem("agentsOrder", JSON.stringify(orderArray))
+      console.log("[v0] Saved agent order:", orderArray)
+    }
     setDraggedIndex(null)
+  }
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortDir(sortDir === "ASC" ? "DESC" : "ASC")
+    } else {
+      setSortBy(column)
+      setSortDir("ASC")
+    }
+    setCurrentPage(0)
+  }
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage)
+  }
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize)
+    setCurrentPage(0)
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <div className="text-lg">Chargement des agents...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          <p className="font-bold">Erreur</p>
+          <p>{error}</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -96,69 +217,114 @@ export default function AgentsPage() {
         </button>
       </div>
 
+      <div className="mb-4 flex items-center justify-between bg-white p-4 rounded-lg shadow">
+        <div className="flex items-center gap-4">
+          <label className="text-sm font-medium">Afficher par page:</label>
+          <select
+            value={pageSize}
+            onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+            className="px-3 py-1 border rounded-lg bg-white text-sm"
+          >
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+          <span className="text-sm text-gray-600">
+            Total: {totalElements} agent{totalElements > 1 ? "s" : ""}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 0}
+            className="px-3 py-1 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+          >
+            Précédent
+          </button>
+          <span className="text-sm">
+            Page {currentPage + 1} / {totalPages || 1}
+          </span>
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages - 1}
+            className="px-3 py-1 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+          >
+            Suivant
+          </button>
+        </div>
+      </div>
+
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-3 w-12"></th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nom</th>
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort("nom")}
+              >
+                <div className="flex items-center gap-1">
+                  Nom
+                  {sortBy === "nom" && (
+                    <span>
+                      {sortDir === "ASC" ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </span>
+                  )}
+                </div>
+              </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Téléphone</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rôle</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {agents.map((agent, index) => (
-              <tr
-                key={agent.id}
-                draggable
-                onDragStart={() => handleDragStart(index)}
-                onDragOver={(e) => handleDragOver(e, index)}
-                onDragEnd={handleDragEnd}
-                className={`hover:bg-gray-50 ${draggedIndex === index ? "opacity-50" : ""}`}
-              >
-                <td className="px-4 py-4 text-center cursor-move">
-                  <GripVertical className="h-5 w-5 text-gray-400 inline-block" />
-                </td>
-                <td className="px-6 py-4 text-sm font-medium text-gray-900">{agent.nom}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{agent.email}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{agent.telephone}</td>
-                <td className="px-6 py-4 text-sm">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      agent.role === "Admin"
-                        ? "bg-purple-100 text-purple-800"
-                        : agent.role === "Manager"
-                          ? "bg-blue-100 text-blue-800"
-                          : agent.role === "Utilisateur"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-800"
-                    }`}
-                  >
-                    {agent.role}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-sm">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs ${
-                      agent.actif ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {agent.actif ? "Actif" : "Inactif"}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right text-sm font-medium">
-                  <button onClick={() => handleEdit(agent)} className="text-blue-600 hover:text-blue-900 mr-4">
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button onClick={() => handleDelete(agent.id)} className="text-red-600 hover:text-red-900">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+            {agents.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  Aucun agent trouvé
                 </td>
               </tr>
-            ))}
+            ) : (
+              agents.map((agent, index) => (
+                <tr
+                  key={agent.id}
+                  draggable
+                  onDragStart={() => handleDragStart(index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragEnd={handleDragEnd}
+                  className={`hover:bg-gray-50 ${draggedIndex === index ? "opacity-50" : ""}`}
+                >
+                  <td className="px-4 py-4 text-center cursor-move">
+                    <GripVertical className="h-5 w-5 text-gray-400 inline-block" />
+                  </td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{agent.nom}</td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{agent.email || "-"}</td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{agent.telephone || "-"}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs ${
+                        agent.actif ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {agent.actif ? "Actif" : "Inactif"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right text-sm font-medium">
+                    <button onClick={() => handleEdit(agent)} className="text-blue-600 hover:text-blue-900 mr-4">
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => agent.id && handleDelete(agent.id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -186,7 +352,6 @@ export default function AgentsPage() {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg"
-                    required
                   />
                 </div>
                 <div>
@@ -196,29 +361,7 @@ export default function AgentsPage() {
                     value={formData.telephone}
                     onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg"
-                    required
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Rôle</label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg bg-white"
-                    required
-                  >
-                    {roles.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {formData.role === "Admin" && "Accès complet au système"}
-                    {formData.role === "Manager" && "Gestion des équipes et données (ne peut pas enlever Admin)"}
-                    {formData.role === "Utilisateur" && "Accès en lecture et édition limitée"}
-                    {formData.role === "Consultant" && "Accès en lecture seule"}
-                  </p>
                 </div>
                 <div className="flex items-center">
                   <input
